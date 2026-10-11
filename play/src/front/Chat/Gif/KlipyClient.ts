@@ -1,6 +1,7 @@
 /**
  * Klipy's GIF API, called from the player's browser (Klipy's terms want the calls to come from the user's app).
- * The key goes in the URL path. Results are family-safe (rating "pg" or lower).
+ * The key goes in the URL path. Results are family-safe: Klipy's docs name the filter "content_filter" in some
+ * places and "rating" in others, so both are sent (an unknown one is ignored).
  *
  * Klipy answers { result, data: { data: [item…], current_page, per_page, has_next } }. An item has
  * file: { hd | md | sm | xs: { gif | webp | mp4 …: { url, width, height } } }. The reading below is forgiving: an
@@ -9,6 +10,7 @@
 
 const API_BASE = "https://api.klipy.com/api/v1";
 export const KLIPY_RATING = "pg";
+export const KLIPY_CONTENT_FILTER = "medium";
 export const GIFS_PER_PAGE = 24;
 
 export interface GifItem {
@@ -39,6 +41,13 @@ export class KlipyError extends Error {
         super(message);
         this.name = "KlipyError";
     }
+}
+
+// Klipy wants a customer id on its requests. It is random, made once per page load: it names nobody.
+let anonymousCustomerId: string | undefined;
+function customerId(): string {
+    anonymousCustomerId ??= typeof crypto.randomUUID === "function" ? crypto.randomUUID() : String(Math.random());
+    return anonymousCustomerId;
 }
 
 type Fetch = (url: string, init?: { signal?: AbortSignal }) => Promise<Response>;
@@ -152,6 +161,8 @@ export function parseGifCategories(body: unknown): GifCategory[] {
     return categories;
 }
 
+const SAFE_SEARCH = { rating: KLIPY_RATING, content_filter: KLIPY_CONTENT_FILTER };
+
 export interface KlipyClient {
     search(query: string, page: number, signal?: AbortSignal): Promise<GifPage>;
     trending(page: number, signal?: AbortSignal): Promise<GifPage>;
@@ -162,7 +173,9 @@ export function createKlipyClient(apiKey: string, fetchFn: Fetch = (url, init) =
     const base = `${API_BASE}/${encodeURIComponent(apiKey)}/gifs`;
 
     async function get(path: string, params: Record<string, string | number>, signal?: AbortSignal): Promise<unknown> {
-        const query = new URLSearchParams(Object.entries(params).map(([key, value]) => [key, String(value)]));
+        const query = new URLSearchParams(
+            Object.entries({ ...params, customer_id: customerId() }).map(([key, value]) => [key, String(value)])
+        );
         let response: Response;
         try {
             response = await fetchFn(`${base}/${path}?${query.toString()}`, { signal });
@@ -181,11 +194,11 @@ export function createKlipyClient(apiKey: string, fetchFn: Fetch = (url, init) =
     return {
         async search(query, page, signal) {
             return parseGifPage(
-                await get("search", { q: query, page, per_page: GIFS_PER_PAGE, rating: KLIPY_RATING }, signal)
+                await get("search", { q: query, page, per_page: GIFS_PER_PAGE, ...SAFE_SEARCH }, signal)
             );
         },
         async trending(page, signal) {
-            return parseGifPage(await get("trending", { page, per_page: GIFS_PER_PAGE, rating: KLIPY_RATING }, signal));
+            return parseGifPage(await get("trending", { page, per_page: GIFS_PER_PAGE, ...SAFE_SEARCH }, signal));
         },
         async categories(signal) {
             return parseGifCategories(await get("categories", {}, signal));

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
     GIFS_PER_PAGE,
+    KLIPY_CONTENT_FILTER,
     KLIPY_RATING,
     KlipyError,
     createKlipyClient,
@@ -120,13 +121,27 @@ describe("createKlipyClient", () => {
         expect(url.searchParams.get("page")).toBe("2");
         expect(url.searchParams.get("per_page")).toBe(String(GIFS_PER_PAGE));
         expect(url.searchParams.get("rating")).toBe(KLIPY_RATING);
+        expect(url.searchParams.get("content_filter")).toBe(KLIPY_CONTENT_FILTER);
         expect(page.items).toHaveLength(1);
     });
 
-    it("asks for the trending GIFs", async () => {
+    it("asks for the trending GIFs, family-safe", async () => {
         const fetchFn = answering({ data: { data: [], has_next: false } });
         await createKlipyClient("k", fetchFn).trending(1);
-        expect(new URL(fetchFn.mock.calls[0][0] as string).pathname).toBe("/api/v1/k/gifs/trending");
+        const url = new URL(fetchFn.mock.calls[0][0] as string);
+        expect(url.pathname).toBe("/api/v1/k/gifs/trending");
+        expect(url.searchParams.get("content_filter")).toBe(KLIPY_CONTENT_FILTER);
+    });
+
+    it("sends the same random customer id on every request, and never anything about the player", async () => {
+        const fetchFn = answering({ data: { data: [], has_next: false } });
+        const client = createKlipyClient("k", fetchFn);
+        await client.trending(1);
+        await client.search("x", 1);
+        const first = new URL(fetchFn.mock.calls[0][0] as string).searchParams.get("customer_id");
+        const second = new URL(fetchFn.mock.calls[1][0] as string).searchParams.get("customer_id");
+        expect(first).toBeTruthy();
+        expect(second).toBe(first);
     });
 
     it("throws a KlipyError with the status when Klipy refuses", async () => {
