@@ -15,8 +15,9 @@ import type {
 import { gameManager } from "../../../../Phaser/Game/GameManager";
 import { gameSceneStore } from "../../../../Stores/GameSceneStore";
 import { localUserStore } from "../../../../Connection/LocalUserStore";
+import { friendsStore } from "../../../Stores/FriendsStore";
 import type { PartnerPlace } from "./PartnerPlace";
-import { findInUniverse, partnerActions, resolvePartnerPlace } from "./PartnerPlace";
+import { findAccountUuid, findInUniverse, partnerActions, resolvePartnerPlace } from "./PartnerPlace";
 
 type UsersByRoom = Map<string | undefined, { roomName: string | undefined; users: ChatUser[] }>;
 
@@ -25,6 +26,8 @@ export interface DirectPartner {
     chatId: string | undefined;
     /** Their avatar in Universe, when they have one right now. */
     user: ChatUser | undefined;
+    /** Their account id: from their avatar, else the member list or your friends. Unknown when they are not in a world with you, not a member you can see and not a friend. */
+    uuid: string | undefined;
     place: PartnerPlace;
     actions: { walkTo: boolean; locate: boolean };
     isBot: boolean;
@@ -100,10 +103,11 @@ export function directPartnerStore(room: ChatRoomMembershipManagement): Readable
             presence,
             proximity,
             chatConnection.ignoredUsers,
+            friendsStore,
             // The current map changes when the scene reloads.
             gameSceneStore,
         ],
-        ([member, map, chatPresence, { participants: inBubble, kind }, ignored, scene]) => {
+        ([member, map, chatPresence, { participants: inBubble, kind }, ignored, friends, scene]) => {
             const chatId = member?.id;
             const currentRoomUrl = scene?.roomUrl;
             const found = chatId ? findInUniverse(map, chatId, currentRoomUrl) : undefined;
@@ -111,6 +115,15 @@ export function directPartnerStore(room: ChatRoomMembershipManagement): Readable
             return {
                 chatId,
                 found,
+                uuid:
+                    user?.uuid ??
+                    (chatId
+                        ? findAccountUuid(
+                              map,
+                              friends.status === "signedOut" ? [] : friends.list?.friends ?? [],
+                              chatId
+                          )
+                        : undefined),
                 chatPresence,
                 sameMap: user?.playUri !== undefined && user.playUri === currentRoomUrl,
                 talkingWithYou:
@@ -140,6 +153,7 @@ export function directPartnerStore(room: ChatRoomMembershipManagement): Readable
         return {
             chatId: state.chatId,
             user,
+            uuid: state.uuid,
             place,
             actions: partnerActions(place, user?.uuid !== undefined),
             isBot: user?.isBot === true,

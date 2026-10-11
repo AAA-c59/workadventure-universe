@@ -73,6 +73,11 @@
     // Your own account seen from somewhere else (another of your tabs is listed before this one is): no chat with it.
     $: isMine = !isMe && isMyAccount(user, me);
 
+    // Someone who isn't in a world with you can still be online on chat (in another world, or Element): the chat says so.
+    $: presence =
+        !isMe && !isMine && !user.isBot && chatId ? gameManager.chatConnection.userPresence(chatId) : undefined;
+    $: onlineElsewhere = !$userStatus && !!$presence && $presence !== "offline";
+
     // Someone with several sessions shows as available as their most available one.
     $: sessionsStatus =
         sessions.length > 1
@@ -137,7 +142,7 @@
         !isMine &&
         !user.isBot &&
         !!user.uuid &&
-        !!$userStatus &&
+        (!!$userStatus || onlineElsewhere) &&
         !blackListManager.isBlackListed(user.uuid)
             ? ([
                   {
@@ -248,7 +253,9 @@
             <!-- svelte-ignore a11y-click-events-have-key-events -->
             <!-- svelte-ignore a11y-no-static-element-interactions -->
             <div
-                class="relative wa-avatar {!$userStatus ? 'opacity-50' : ''} cursor-pointer w-7 h-7 rounded-md"
+                class="relative wa-avatar {!$userStatus && !onlineElsewhere
+                    ? 'opacity-50'
+                    : ''} cursor-pointer w-7 h-7 rounded-md"
                 style={`background-color: ${color ?? defaultColor}`}
                 on:click|stopPropagation={openWokaMenu}
             >
@@ -263,7 +270,7 @@
             <!-- svelte-ignore a11y-click-events-have-key-events -->
             <!-- svelte-ignore a11y-no-static-element-interactions -->
             <div
-                class={`flex-auto min-w-0 ms-1 ${!$userStatus && "opacity-50"} cursor-pointer`}
+                class={`flex-auto min-w-0 ms-1 ${!$userStatus && !onlineElsewhere && "opacity-50"} cursor-pointer`}
                 on:click|stopPropagation={openWokaMenu}
             >
                 <div class="flex items-center h-4 min-w-0">
@@ -313,6 +320,18 @@
                                 />
                             {/if}
                             {statusLabel($userStatus, $LL)}
+                        </div>
+                    {:else if onlineElsewhere}
+                        <div
+                            class="flex items-center brightness-150"
+                            style="color:{getColorHexOfStatus(AvailabilityStatus.ONLINE)}"
+                            data-testid={`online-elsewhere-${user.username}`}
+                        >
+                            <div
+                                class="rounded-full me-1 h-1.5 w-1.5"
+                                style="background:{getColorHexOfStatus(AvailabilityStatus.ONLINE)}"
+                            />
+                            {$LL.chat.userList.onlineElsewhere()}
                         </div>
                     {:else}
                         {$LL.chat.userList.disconnected()}

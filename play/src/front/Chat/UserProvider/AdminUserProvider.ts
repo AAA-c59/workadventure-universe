@@ -42,7 +42,8 @@ export class AdminUserProvider implements UserProviderInterface {
                     username: currentMember.wokaName,
                     isAdmin: currentMember.tags.includes("admin"),
                     isMember: currentMember.tags.includes("member"),
-                    uuid: undefined,
+                    // Their account id, so an away member can still be invited, befriended or reported.
+                    uuid: currentMember.uuid || undefined,
                     color: undefined,
                     spaceUserId: undefined,
                 });

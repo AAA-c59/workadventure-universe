@@ -166,4 +166,33 @@ describe("UserProviderMerger pictures", () => {
         ]);
         expect(pictureOf(merger)).toBe("live-woka");
     });
+
+    it("gives a member who is away the account id Orbit sent, and keeps it when they are in the world", () => {
+        const world: UserProviderInterface = {
+            users: writable<PartialChatUser[]>([
+                {
+                    chatId: "@ada:chat",
+                    uuid: "uuid-ada",
+                    username: "Ada",
+                    playUri: "playUri1",
+                    spaceUserId: "playUri1_1",
+                    availabilityStatus: writable(AvailabilityStatus.ONLINE),
+                },
+            ]),
+            setFilter: () => Promise.resolve(),
+        };
+        const members: UserProviderInterface = {
+            users: writable<PartialChatUser[]>([
+                { chatId: "@ada:chat", uuid: "uuid-ada", username: "Ada" },
+                { chatId: "@bob:chat", uuid: "uuid-bob", username: "Bob" },
+            ]),
+            setFilter: () => Promise.resolve(),
+        };
+
+        const byRoom = get(new UserProviderMerger([world, members]).usersByRoomStore);
+
+        // Ada appears once, in her room, and Bob alone under "no room" with his account id.
+        expect(byRoom.get("playUri1")?.users.map((user) => user.uuid)).toEqual(["uuid-ada"]);
+        expect(byRoom.get(undefined)?.users.map((user) => [user.username, user.uuid])).toEqual([["Bob", "uuid-bob"]]);
+    });
 });

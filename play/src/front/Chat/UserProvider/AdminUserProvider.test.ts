@@ -59,4 +59,20 @@ describe("AdminUserProvider", () => {
         expect(get(provider.users)[0].storedWoka).toBeUndefined();
         unsubscribe();
     });
+
+    it("keeps each member's account id, so an away member can be invited, befriended or reported", async () => {
+        const answer = [
+            { ...member("Ada"), uuid: "uuid-ada" },
+            { ...member("Bob"), uuid: "" },
+        ];
+        const connection = {
+            queryChatMembers: () => Promise.resolve({ members: answer }),
+        } as unknown as RoomConnection;
+        const provider = new AdminUserProvider(connection);
+        const unsubscribe = provider.users.subscribe(() => undefined);
+        await provider.setFilter("");
+
+        expect(get(provider.users).map((user) => user.uuid)).toEqual(["uuid-ada", undefined]);
+        unsubscribe();
+    });
 });
