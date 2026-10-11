@@ -11,7 +11,9 @@ vi.mock("../../../WebRtc/CoWebsite/SimpleCoWebsite", () => ({ SimpleCoWebsite: c
 vi.mock("../LinkPreviewFetcher", async () => {
     const { writable } = await import("svelte/store");
     return {
-        fetchWebPreview: vi.fn(() => new Promise<never>(() => {})),
+        fetchWebPreview: vi.fn(() =>
+            Promise.resolve({ title: "A page", description: "About it", image: "https://example.com/og.png" })
+        ),
         fetchYoutubePreview: vi.fn(() => new Promise<never>(() => {})),
         playingChatVideoStore: writable(undefined),
     };
@@ -46,6 +48,7 @@ import { sanitizeHTML } from "../../Components/Room/Message/WA-HTML-Sanitizer";
 import LinkPreview from "../LinkPreview.svelte";
 
 const GIF = "https://static.klipy.com/ii/abc/cat.gif";
+const PICTURE = "https://example.com/cat.png";
 
 describe("a picture in a chat message", () => {
     let target: HTMLElement;
@@ -117,22 +120,43 @@ describe("a picture in a chat message", () => {
     });
 
     it.each([
-        ["a pasted picture link", "https://example.com/cat.png"],
-        ["a pasted picture link with text", "look at this https://example.com/cat.png"],
-        ["a GIF file that isn't from a GIF site", "https://example.com/dance.gif"],
-    ])("keeps opening %s in a new tab", async (_name, body) => {
+        ["a pasted picture link", PICTURE],
+        ["a pasted picture link with text", `look at this ${PICTURE}`],
+        ["a GIF file from another site", "https://example.com/dance.gif"],
+    ])("opens the picture of %s in the picture viewer", async (_name, body) => {
         preview = new LinkPreview({ target, props: { body, alone: false } });
         await tick();
         const card = target.querySelector<HTMLAnchorElement>('[data-testid="imageLinkPreview"]');
         if (!card) throw new Error("no picture card");
 
-        const event = click(card);
+        expect(click(card).defaultPrevented).toBe(true);
+        await tick();
+        expect(document.querySelector("[data-lightbox] img")?.getAttribute("src")).toBe(body.split(" ").pop());
+    });
+
+    it("keeps the address of a picture that didn't load a link to a new tab", async () => {
+        const card = await show(GIF);
+        card.querySelector("img")?.dispatchEvent(new Event("error"));
         await tick();
 
-        expect(event.defaultPrevented).toBe(false);
-        expect(card.getAttribute("target")).toBe("_blank");
+        const fallback = target.querySelector<HTMLAnchorElement>(".link-preview-fallback");
+        if (!fallback) throw new Error("no fallback link");
+        expect(fallback.getAttribute("target")).toBe("_blank");
+        expect(click(fallback).defaultPrevented).toBe(false);
+        await tick();
         expect(document.querySelector("[data-lightbox]")).toBeNull();
-        expect(get(lightboxOpenStore)).toBe(false);
+    });
+
+    it("leaves a web page card a link to the page in a new tab", async () => {
+        preview = new LinkPreview({ target, props: { body: "https://example.com/article", alone: true } });
+        await vi.waitFor(() => expect(target.querySelector('[data-testid="webLinkPreview"]')).not.toBeNull());
+        const card = target.querySelector<HTMLAnchorElement>('[data-testid="webLinkPreview"]');
+        if (!card) throw new Error("no web card");
+
+        expect(card.getAttribute("target")).toBe("_blank");
+        expect(click(card.querySelector("img") ?? card).defaultPrevented).toBe(false);
+        await tick();
+        expect(document.querySelector("[data-lightbox]")).toBeNull();
     });
 
     it("keeps a link in the message text a link to a new tab", () => {
