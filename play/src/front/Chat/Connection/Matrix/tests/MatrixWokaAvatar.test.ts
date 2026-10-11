@@ -8,6 +8,7 @@ import {
     parseSavedWokaAvatar,
     saveWokaAvatar,
     shouldSaveWokaAvatar,
+    wokaIdentity,
 } from "../MatrixWokaAvatar";
 
 describe("shouldSaveWokaAvatar", () => {
@@ -34,6 +35,22 @@ describe("shouldSaveWokaAvatar", () => {
     it("keeps a picture they chose in another chat app", () => {
         expect(shouldSaveWokaAvatar("mxc://x/photo", saved, "new")).toBe(false);
         expect(shouldSaveWokaAvatar("mxc://x/photo", undefined, "new")).toBe(false);
+    });
+});
+
+describe("wokaIdentity", () => {
+    it("is the woka's layers, whatever its picture", () => {
+        expect(wokaIdentity("data:image/png;base64,AAAA", ["body1", "hair2"])).toBe(
+            wokaIdentity("data:image/png;base64,BBBB", ["body1", "hair2"])
+        );
+        expect(wokaIdentity("data:image/png;base64,AAAA", ["body1", "hair2"])).not.toBe(
+            wokaIdentity("data:image/png;base64,AAAA", ["body1", "hair3"])
+        );
+    });
+
+    it("is the picture when the layers aren't known", () => {
+        expect(wokaIdentity("data:image/png;base64,AAAA", null)).toBe("data:image/png;base64,AAAA");
+        expect(wokaIdentity("data:image/png;base64,AAAA", [])).toBe("data:image/png;base64,AAAA");
     });
 });
 
@@ -68,6 +85,20 @@ describe("saveWokaAvatar", () => {
         const client = fakeClient("mxc://x/woka", { hash: await hashWoka(woka), mxc: "mxc://x/woka" });
 
         await saveWokaAvatar(client as unknown as MatrixClient, woka);
+
+        expect(client.uploadContent).not.toHaveBeenCalled();
+        expect(client.setAvatarUrl).not.toHaveBeenCalled();
+    });
+
+    it("doesn't upload again when the same woka gives a different picture (another load or browser)", async () => {
+        const identity = wokaIdentity("data:image/png;base64,AAAA", ["body1", "hair2"]);
+        const client = fakeClient("mxc://x/woka", { hash: await hashWoka(identity), mxc: "mxc://x/woka" });
+
+        await saveWokaAvatar(
+            client as unknown as MatrixClient,
+            "data:image/png;base64,BBBB",
+            wokaIdentity("data:image/png;base64,BBBB", ["body1", "hair2"])
+        );
 
         expect(client.uploadContent).not.toHaveBeenCalled();
         expect(client.setAvatarUrl).not.toHaveBeenCalled();
@@ -139,7 +170,7 @@ describe("WokaAvatarSaver", () => {
         saver.update("data:image/png;base64,NEW");
         await saver.settled;
         expect(save).toHaveBeenCalledTimes(1);
-        expect(save).toHaveBeenCalledWith(client, "data:image/png;base64,NEW");
+        expect(save).toHaveBeenCalledWith(client, "data:image/png;base64,NEW", "data:image/png;base64,NEW");
 
         saver.stop();
         await vi.advanceTimersByTimeAsync(10 * 60_000);

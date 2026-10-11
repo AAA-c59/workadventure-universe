@@ -4,7 +4,7 @@ import type { MatrixClient } from "matrix-js-sdk";
 export const WOKA_AVATAR_ACCOUNT_DATA = "net.bawes.universe.woka_avatar";
 
 export interface SavedWokaAvatar {
-    /** SHA-256 of the woka picture that was saved. */
+    /** SHA-256 of the woka that was saved: its layers when known, else its picture. */
     hash: string;
     /** The profile picture it became. */
     mxc: string;
@@ -74,13 +74,26 @@ export async function renderWokaAvatar(wokaDataUrl: string): Promise<Blob | unde
 }
 
 /**
- * Saves the woka as the chat profile picture, so other chat apps and people who aren't in Universe right now see it.
- * Does nothing when it's already saved, or when the person chose their own picture elsewhere.
+ * What identifies a woka across page loads and devices: its layers. The snapshot picture's bytes can differ from one
+ * load or browser to the next for the same woka, and each new picture adds a "changed their profile picture" event
+ * to every chat. Falls back to the picture when the layers aren't known.
  */
-export async function saveWokaAvatar(client: MatrixClient, wokaDataUrl: string): Promise<void> {
+export function wokaIdentity(wokaDataUrl: string, textureIds: readonly string[] | null | undefined): string {
+    return textureIds && textureIds.length > 0 ? `layers:${textureIds.join("\n")}` : wokaDataUrl;
+}
+
+/**
+ * Saves the woka as the chat profile picture, so other chat apps and people who aren't in Universe right now see it.
+ * Does nothing when the same woka (`identity`) is already saved, or when the person chose their own picture elsewhere.
+ */
+export async function saveWokaAvatar(
+    client: MatrixClient,
+    wokaDataUrl: string,
+    identity: string = wokaDataUrl
+): Promise<void> {
     const userId = client.getUserId();
     if (!userId) return;
-    const hash = await hashWoka(wokaDataUrl);
+    const hash = await hashWoka(identity);
     const saved = parseSavedWokaAvatar(client.getAccountData(WOKA_AVATAR_ACCOUNT_DATA)?.getContent());
     // If the current picture can't be read, nothing is saved: it may be one they chose themselves.
     const profile = await client.getProfileInfo(userId, "avatar_url");
@@ -106,10 +119,11 @@ export class WokaAvatarSaver {
 
     constructor(private readonly client: MatrixClient, private readonly save = saveWokaAvatar) {}
 
-    update(woka: string): void {
+    /** `identity` is what makes two wokas the same (see `wokaIdentity`); a woka already saved isn't saved again. */
+    update(woka: string, identity: string = woka): void {
         this.latest = woka;
         clearTimeout(this.retryTimer);
-        this.queue(woka, 0);
+        this.queue(woka, identity, 0);
     }
 
     stop(): void {
@@ -122,16 +136,16 @@ export class WokaAvatarSaver {
         return this.saving;
     }
 
-    private queue(woka: string, attempt: number): void {
+    private queue(woka: string, identity: string, attempt: number): void {
         // One save at a time, so a quick woka change can't race the previous upload; an older woka is skipped.
         this.saving = this.saving
-            .then(() => (this.latest === woka ? this.save(this.client, woka) : undefined))
+            .then(() => (this.latest === woka ? this.save(this.client, woka, identity) : undefined))
             .catch((error) => {
                 console.warn("Could not save the woka as the chat picture", error);
                 const delay = WOKA_AVATAR_RETRY_DELAYS[attempt];
                 if (delay === undefined || this.latest !== woka) return;
                 this.retryTimer = setTimeout(() => {
-                    if (this.latest === woka) this.queue(woka, attempt + 1);
+                    if (this.latest === woka) this.queue(woka, identity, attempt + 1);
                 }, delay);
             });
     }
