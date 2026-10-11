@@ -187,4 +187,16 @@ describe("WokaAvatarSaver", () => {
         await vi.advanceTimersByTimeAsync(10 * 60_000);
         expect(save).toHaveBeenCalledTimes(1);
     });
+
+    it("saves only the latest layers when the picture is the same", async () => {
+        const save = vi.fn().mockResolvedValue(undefined);
+        const saver = new WokaAvatarSaver(client, save);
+
+        saver.update("data:image/png;base64,SAME", "layers:old");
+        saver.update("data:image/png;base64,SAME", "layers:new");
+        await saver.settled;
+
+        expect(save).toHaveBeenCalledTimes(1);
+        expect(save).toHaveBeenCalledWith(client, "data:image/png;base64,SAME", "layers:new");
+    });
 });

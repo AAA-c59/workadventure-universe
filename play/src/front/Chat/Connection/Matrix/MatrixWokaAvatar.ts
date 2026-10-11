@@ -115,6 +115,7 @@ export const WOKA_AVATAR_RETRY_DELAYS = [5_000, 30_000, 120_000];
 export class WokaAvatarSaver {
     private saving: Promise<void> = Promise.resolve();
     private latest: string | undefined;
+    private latestIdentity: string | undefined;
     private retryTimer: ReturnType<typeof setTimeout> | undefined;
 
     constructor(private readonly client: MatrixClient, private readonly save = saveWokaAvatar) {}
@@ -122,12 +123,14 @@ export class WokaAvatarSaver {
     /** `identity` is what makes two wokas the same (see `wokaIdentity`); a woka already saved isn't saved again. */
     update(woka: string, identity: string = woka): void {
         this.latest = woka;
+        this.latestIdentity = identity;
         clearTimeout(this.retryTimer);
         this.queue(woka, identity, 0);
     }
 
     stop(): void {
         this.latest = undefined;
+        this.latestIdentity = undefined;
         clearTimeout(this.retryTimer);
     }
 
@@ -136,16 +139,20 @@ export class WokaAvatarSaver {
         return this.saving;
     }
 
+    private isLatest(woka: string, identity: string): boolean {
+        return this.latest === woka && this.latestIdentity === identity;
+    }
+
     private queue(woka: string, identity: string, attempt: number): void {
         // One save at a time, so a quick woka change can't race the previous upload; an older woka is skipped.
         this.saving = this.saving
-            .then(() => (this.latest === woka ? this.save(this.client, woka, identity) : undefined))
+            .then(() => (this.isLatest(woka, identity) ? this.save(this.client, woka, identity) : undefined))
             .catch((error) => {
                 console.warn("Could not save the woka as the chat picture", error);
                 const delay = WOKA_AVATAR_RETRY_DELAYS[attempt];
-                if (delay === undefined || this.latest !== woka) return;
+                if (delay === undefined || !this.isLatest(woka, identity)) return;
                 this.retryTimer = setTimeout(() => {
-                    if (this.latest === woka) this.queue(woka, identity, attempt + 1);
+                    if (this.isLatest(woka, identity)) this.queue(woka, identity, attempt + 1);
                 }, delay);
             });
     }

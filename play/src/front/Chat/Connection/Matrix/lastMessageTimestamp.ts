@@ -5,8 +5,11 @@ export interface TimelineEventLike {
     getRelation(): { rel_type?: string } | null | undefined;
 }
 
-/** Event types that are a message someone sent. Encrypted ones count before they are decrypted. */
-const MESSAGE_EVENT_TYPES = new Set(["m.room.message", "m.room.encrypted", "m.sticker"]);
+/**
+ * Event types that are a message someone sent, as the chat shows them (it shows no stickers).
+ * Encrypted ones count before they are decrypted.
+ */
+const MESSAGE_EVENT_TYPES = new Set(["m.room.message", "m.room.encrypted"]);
 /** Edits and reactions, which stay readable on an encrypted event before it is decrypted. */
 const NOT_A_NEW_MESSAGE = new Set(["m.replace", "m.annotation"]);
 

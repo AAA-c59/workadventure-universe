@@ -48,9 +48,15 @@ describe("lastMessageTimestamp", () => {
         expect(lastMessageTimestamp(events, undefined, undefined)).toBe(DEC_2025);
     });
 
-    it("counts encrypted messages and stickers", () => {
+    it("counts encrypted messages, but not stickers (the chat doesn't show them)", () => {
         expect(lastMessageTimestamp([event("m.room.encrypted", OCT_2026)], undefined, undefined)).toBe(OCT_2026);
-        expect(lastMessageTimestamp([event("m.sticker", OCT_2026)], undefined, undefined)).toBe(OCT_2026);
+        expect(
+            lastMessageTimestamp(
+                [event("m.room.message", DEC_2025), event("m.sticker", OCT_2026)],
+                undefined,
+                undefined
+            )
+        ).toBe(DEC_2025);
     });
 
     it("uses the newest loaded message when the timeline holds none (only member events)", () => {
