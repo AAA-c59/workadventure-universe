@@ -180,3 +180,4 @@ export { default as IconLayoutSidebarRight } from "~icons/tabler/layout-sidebar-
 export { default as IconPlayerPlayFilled } from "~icons/tabler/player-play-filled";
 export { default as IconGif } from "~icons/tabler/gif";
 export { default as IconTrendingUp } from "~icons/tabler/trending-up";
+export { default as IconWifiOff } from "~icons/tabler/wifi-off";
