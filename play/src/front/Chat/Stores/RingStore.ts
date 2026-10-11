@@ -168,6 +168,9 @@ export function createRingStore(now: () => number = Date.now) {
         }
     }
 
+    /** Callers waiting for the next room connection (see whenConnected). */
+    let connectionWaiters: (() => void)[] = [];
+
     function requireConnection(): RingConnection {
         if (!connection) throw new Error("Invites need a connection to the room");
         return connection;
@@ -185,6 +188,9 @@ export function createRingStore(now: () => number = Date.now) {
             connection = newConnection;
             updates = newConnection.friendsUpdateMessageStream.subscribe(onUpdate);
             invitesEnabled.set(true);
+            const waiters = connectionWaiters;
+            connectionWaiters = [];
+            waiters.forEach((resolve) => resolve());
             // A new room is a new connection: rings from the last one ended with it.
             for (const [uuid, entry] of get(outgoing)) {
                 if (entry.state === "ringing" || entry.state === "starting") setEntry(uuid, undefined);
@@ -198,6 +204,24 @@ export function createRingStore(now: () => number = Date.now) {
             connection = undefined;
             invitesEnabled.set(false);
             clearIncoming();
+        },
+        /**
+         * Resolves true once the room has a connection: at once when it has one, otherwise when the next one attaches
+         * (a rejoin after a rename closes the old one), or false after `timeoutMs`.
+         */
+        whenConnected(timeoutMs: number): Promise<boolean> {
+            if (connection) return Promise.resolve(true);
+            return new Promise<boolean>((resolve) => {
+                const arrived = () => {
+                    clearTimeout(timer);
+                    resolve(true);
+                };
+                const timer = setTimeout(() => {
+                    connectionWaiters = connectionWaiters.filter((waiter) => waiter !== arrived);
+                    resolve(false);
+                }, timeoutMs);
+                connectionWaiters.push(arrived);
+            });
         },
         /** Rings a friend. A refusal shows a toast; resolves whether it is ringing. */
         async ring(uuid: string, name: string): Promise<boolean> {

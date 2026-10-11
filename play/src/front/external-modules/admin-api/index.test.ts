@@ -51,6 +51,7 @@ const mocks = vi.hoisted(() => ({
     pusherGet: vi.fn(),
     isBlackListed: vi.fn((): boolean => false),
     ring: vi.fn((): Promise<boolean> => Promise.resolve(true)),
+    whenConnected: vi.fn((): Promise<boolean> => Promise.resolve(true)),
     openDirectChatRoom: vi.fn((): Promise<void> => Promise.resolve()),
 }));
 
@@ -91,7 +92,9 @@ vi.mock("../../Connection/LocalUserStore", () => ({
 }));
 
 vi.mock("../../WebRtc/BlackListManager", () => ({ blackListManager: { isBlackListed: mocks.isBlackListed } }));
-vi.mock("../../Chat/Stores/RingStore", () => ({ ringStore: { ring: mocks.ring } }));
+vi.mock("../../Chat/Stores/RingStore", () => ({
+    ringStore: { ring: mocks.ring, whenConnected: mocks.whenConnected },
+}));
 vi.mock("../../Chat/Utils", () => ({ openDirectChatRoom: mocks.openDirectChatRoom }));
 
 vi.mock("../../Connection/Capabilities", () => ({
@@ -551,9 +554,13 @@ describe("The Orbit bridge", () => {
             chatId,
         });
 
+        /** The invite and the chat wait on the room's connection, so they happen a moment after the request. */
+        const settle = () => vi.advanceTimersByTimeAsync(0);
+
         it("invites them and closes Orbit, as a tap on Invite in the People tab does", async () => {
             const revision = await openOrbit();
             fromOrbit(invite(revision));
+            await settle();
             expect(mocks.ring).toHaveBeenCalledWith("uuid-ali", "Ali");
             expect(mocks.modalVisibilitySet).toHaveBeenCalledWith(false);
         });
@@ -561,8 +568,75 @@ describe("The Orbit bridge", () => {
         it("opens their chat and closes Orbit", async () => {
             const revision = await openOrbit();
             fromOrbit(message(revision));
+            await settle();
             expect(mocks.openDirectChatRoom).toHaveBeenCalledWith("@ali:chat.example.com");
             expect(mocks.modalVisibilitySet).toHaveBeenCalledWith(false);
+        });
+
+        describe("after a name saved in Orbit, which rejoins the room as Orbit closes", () => {
+            const order: string[] = [];
+            let connect: (connected: boolean) => void;
+
+            async function renameThenOpen() {
+                order.length = 0;
+                mocks.playerName = "Khalid";
+                let onVisibility: ((visible: boolean) => void) | undefined;
+                mocks.modalVisibilitySubscribe.mockImplementation(((callback: (visible: boolean) => void) => {
+                    onVisibility = callback;
+                    return vi.fn();
+                }) as unknown as () => ReturnType<typeof vi.fn>);
+                // Closing Orbit sets the store to hidden, which tells the module Orbit closed (and applies the new name).
+                mocks.modalVisibilitySet.mockImplementation(((visible: boolean) => {
+                    order.push(`modal ${visible ? "shown" : "hidden"}`);
+                    if (!visible) onVisibility?.(false);
+                }) as unknown as () => void);
+                mocks.rejoinCurrentRoom.mockImplementation(() => {
+                    order.push("rejoin");
+                });
+                // The old connection is gone after the rejoin; the new one arrives when `connect` is called.
+                mocks.whenConnected.mockImplementationOnce(
+                    () =>
+                        new Promise<boolean>((resolve) => {
+                            order.push("waiting for the new connection");
+                            connect = resolve;
+                        })
+                );
+                mocks.ring.mockImplementation(() => {
+                    order.push("ring");
+                    return Promise.resolve(true);
+                });
+                mocks.openDirectChatRoom.mockImplementation(() => {
+                    order.push("open chat");
+                    return Promise.resolve();
+                });
+                const revision = await openOrbit();
+                fromOrbit({ type: "orbit-profile-changed", version: 1, roomRevision: revision, name: "Khalid A" });
+                return revision;
+            }
+
+            it("rings only once the new connection is up, not on the one the rejoin closed", async () => {
+                const revision = await renameThenOpen();
+                fromOrbit(invite(revision));
+                await settle();
+                expect(order.slice(-3)).toEqual(["modal hidden", "rejoin", "waiting for the new connection"]);
+                expect(mocks.ring).not.toHaveBeenCalled();
+
+                connect(true);
+                await settle();
+                expect(order.at(-1)).toBe("ring");
+                expect(mocks.ring).toHaveBeenCalledWith("uuid-ali", "Ali");
+            });
+
+            it("opens their chat once the new connection is up", async () => {
+                const revision = await renameThenOpen();
+                fromOrbit(message(revision));
+                await settle();
+                expect(mocks.openDirectChatRoom).not.toHaveBeenCalled();
+
+                connect(true);
+                await settle();
+                expect(order.at(-1)).toBe("open chat");
+            });
         });
 
         it("ignores a request from another window, origin or visit, and a malformed one", async () => {
@@ -573,6 +647,7 @@ describe("The Orbit bridge", () => {
             fromOrbit(message(revision, "not a matrix id"));
             fromOrbit({ ...invite(revision), uuid: "" });
             fromOrbit({ ...invite(revision), version: 2 });
+            await settle();
             expect(mocks.ring).not.toHaveBeenCalled();
             expect(mocks.openDirectChatRoom).not.toHaveBeenCalled();
             expect(mocks.modalVisibilitySet).not.toHaveBeenCalled();
@@ -584,6 +659,7 @@ describe("The Orbit bridge", () => {
             mocks.isBlackListed.mockReturnValueOnce(true);
             fromOrbit(invite(revision));
             fromOrbit(message(revision, "@me:chat.example.com"));
+            await settle();
             expect(mocks.ring).not.toHaveBeenCalled();
             expect(mocks.openDirectChatRoom).not.toHaveBeenCalled();
         });
