@@ -48,6 +48,17 @@ describe("wokaIdentity", () => {
         );
     });
 
+    it("saves when the woka's layers really change, and the first time, but not for the same layers", async () => {
+        const before = await hashWoka(wokaIdentity("data:image/png;base64,AAAA", ["body1", "hair2"]));
+        const sameWoka = await hashWoka(wokaIdentity("data:image/png;base64,BBBB", ["body1", "hair2"]));
+        const newWoka = await hashWoka(wokaIdentity("data:image/png;base64,CCCC", ["body1", "hair3"]));
+        const saved = { hash: before, mxc: "mxc://x/woka" };
+
+        expect(shouldSaveWokaAvatar("mxc://x/woka", saved, sameWoka)).toBe(false);
+        expect(shouldSaveWokaAvatar("mxc://x/woka", saved, newWoka)).toBe(true);
+        expect(shouldSaveWokaAvatar(undefined, undefined, newWoka)).toBe(true);
+    });
+
     it("is the picture when the layers aren't known", () => {
         expect(wokaIdentity("data:image/png;base64,AAAA", null)).toBe("data:image/png;base64,AAAA");
         expect(wokaIdentity("data:image/png;base64,AAAA", [])).toBe("data:image/png;base64,AAAA");

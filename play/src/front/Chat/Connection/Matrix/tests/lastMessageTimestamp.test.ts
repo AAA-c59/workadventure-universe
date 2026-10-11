@@ -19,6 +19,15 @@ describe("lastMessageTimestamp", () => {
         expect(lastMessageTimestamp(events, undefined, undefined)).toBe(DEC_2025);
     });
 
+    it("moves to a new message sent after the member event", () => {
+        const events = [
+            event("m.room.message", DEC_2025),
+            event("m.room.member", OCT_2026 - 1000),
+            event("m.room.message", OCT_2026),
+        ];
+        expect(lastMessageTimestamp(events, DEC_2025, undefined)).toBe(OCT_2026);
+    });
+
     it("ignores reactions, edits and other room changes after the last message", () => {
         const events = [
             event("m.room.message", DEC_2025),
