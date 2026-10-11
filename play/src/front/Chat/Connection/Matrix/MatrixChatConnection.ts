@@ -49,8 +49,7 @@ import { selectedRoomStore } from "../../Stores/SelectRoomStore";
 import LL from "../../../../i18n/i18n-svelte";
 import type { RequestedStatus } from "../../../Rules/StatusRules/statusRules";
 import { MATRIX_ADMIN_USER, MATRIX_DOMAIN } from "../../../Enum/EnvironmentVariable";
-import { currentPlayerWokaStore } from "../../../Stores/CurrentPlayerWokaStore";
-import { gameManager } from "../../../Phaser/Game/GameManager";
+import { currentPlayerWokaLayersStore, currentPlayerWokaStore } from "../../../Stores/CurrentPlayerWokaStore";
 import { MatrixRateLimiter } from "../../Services/MatrixRateLimiter";
 import { MatrixChatRoom } from "./MatrixChatRoom";
 import type { MatrixSecurity } from "./MatrixSecurity";
@@ -1217,7 +1216,7 @@ export class MatrixChatConnection implements ChatConnectionInterface {
         this.wokaAvatarSaver = saver;
         this.wokaAvatarUnsubscriber = currentPlayerWokaStore.subscribe((woka) => {
             if (!woka || woka === defaultWoka) return;
-            saver.update(woka, wokaIdentity(woka, gameManager.getCharacterTextureIds()));
+            saver.update(woka, wokaIdentity(woka, get(currentPlayerWokaLayersStore)));
         });
     }
 
