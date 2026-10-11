@@ -914,6 +914,23 @@ describe("Signing Orbit in when the OIDC access token has run out", () => {
             expect(mocks.pusherGet).not.toHaveBeenCalled();
         });
 
+        it("joins with the renewed token when it shares a renewal another caller started", async () => {
+            const expired = makeAccessTokenJwt(makeOidcToken(nowSeconds() - 10));
+            const renewed = makeAccessTokenJwt(makeOidcToken(nowSeconds() + 3600));
+            mocks.getAuthToken.mockReturnValue(expired);
+            mocks.setAuthToken.mockImplementation((token: string) => mocks.getAuthToken.mockReturnValue(token));
+            vi.resetModules();
+            const module = await import("./orbitAccessToken");
+            const release = pendingMe();
+            // Orbit's frame starts the renewal; the room join arrives while it runs.
+            const frame = module.freshOrbitAccessToken({ userAccessToken: expired, roomId: "room" }, false, () => true);
+            const joined = module.gameTokenToJoinWith(expired, "other-room", () => true);
+            release(renewed);
+            await frame;
+            expect(await joined).toBe(renewed);
+            expect(mocks.pusherGet).toHaveBeenCalledTimes(1);
+        });
+
         it("joins with the token it has when /me can't renew", async () => {
             const expired = makeAccessTokenJwt(makeOidcToken(nowSeconds() - 10));
             mocks.getAuthToken.mockReturnValue(expired);

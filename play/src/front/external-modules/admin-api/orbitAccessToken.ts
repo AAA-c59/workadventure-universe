@@ -152,5 +152,7 @@ export async function gameTokenToJoinWith(
     } catch (error) {
         console.warn("Could not renew the sign-in token before joining a room", error);
     }
-    return holder.userAccessToken ?? gameToken;
+    // A renewal another caller started (Orbit's frame) and this one shared saved its result to the store, not to this
+    // holder: the store has the newest token.
+    return localUserStore.getAuthToken() ?? holder.userAccessToken ?? gameToken;
 }
