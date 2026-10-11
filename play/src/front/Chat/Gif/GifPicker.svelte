@@ -79,7 +79,8 @@
                     : await klipy.search(forQuery, nextPage, abort.signal);
             if (request !== requestCounter) return;
             addItems(result.items);
-            hasNext = result.hasNext;
+            // A page with nothing to show ends the paging, so a strange answer can't loop.
+            hasNext = result.hasNext && result.items.length > 0;
             page = nextPage;
             empty = columns[0].length + columns[1].length === 0;
             fillIfShort().catch((error) => console.error(error));

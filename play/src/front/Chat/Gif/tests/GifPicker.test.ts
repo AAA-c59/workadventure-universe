@@ -158,6 +158,16 @@ describe("GifPicker", () => {
         expect(target.querySelector('[data-testid="gifPickerEmpty"]')?.textContent).toContain("No GIFs found.");
     });
 
+    it("stops asking for more when a page has nothing to show, even if it says there is more", async () => {
+        const search = vi.fn().mockResolvedValue({ items: [], hasNext: true });
+        mount(fakeClient({ search }));
+        type("zzzz");
+        await vi.advanceTimersByTimeAsync(350);
+        await settle();
+        await settle();
+        expect(search).toHaveBeenCalledTimes(1);
+    });
+
     it("shows an error with a way to try again", async () => {
         const search = vi
             .fn()

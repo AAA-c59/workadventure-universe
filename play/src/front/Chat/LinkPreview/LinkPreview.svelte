@@ -224,8 +224,8 @@
             on:error={() => (imageFailed = true)}
         />
     </a>
-{:else if link?.kind === "image" && alone}
-    <!-- The picture didn't load and its address is not shown above: the message shows it, so it is never empty. -->
+{:else if link?.kind === "image" && (alone || isGifSiteImage(link.url))}
+    <!-- The picture didn't load and its address is not shown above (a lone image link, or a GIF): show it here so it is never lost. -->
     <a class="link-preview-fallback" href={link.url} target="_blank" rel="noopener noreferrer">{link.url}</a>
 {:else if link?.kind === "web" && web && (web.title || web.description)}
     <a
