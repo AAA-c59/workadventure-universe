@@ -105,6 +105,20 @@ const GOOGLE_NAMES: Record<string, string> = {
 
 const IMAGE_PATH = /\.(png|jpe?g|gif|webp|avif)$/i;
 
+// The sites GIFs come from. A message that is only a picture link from one of them is shown as the GIF alone.
+const GIF_SITES = ["klipy.com", "giphy.com", "tenor.com"];
+
+/** Whether the link is a picture on one of the GIF sites (the chat's GIF picker sends such a link). */
+export function isGifSiteImage(link: string): boolean {
+    try {
+        const url = new URL(link);
+        if (url.protocol !== "https:" || !IMAGE_PATH.test(url.pathname)) return false;
+        return GIF_SITES.some((site) => url.hostname === site || url.hostname.endsWith(`.${site}`));
+    } catch {
+        return false;
+    }
+}
+
 /** What a link in a chat message is, and so how it previews. */
 export function classifyLink(link: string, apps: LinkApps): LinkKind {
     let url: URL;

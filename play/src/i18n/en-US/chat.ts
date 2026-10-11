@@ -549,6 +549,18 @@ const chat: BaseTranslation = {
         play: "Play {title}",
         sendWithoutPreview: "Send without a preview",
     },
+    gifPicker: {
+        button: "GIF",
+        title: "GIFs",
+        searchPlaceholder: "Search Klipy",
+        back: "Back",
+        clearSearch: "Clear search",
+        trending: "Trending GIFs",
+        loadError: "GIFs could not be loaded.",
+        retry: "Try again",
+        noResults: "No GIFs found.",
+        send: "Send GIF {title}",
+    },
     fileAttachment: {
         title: "File attachment",
         description: "Upload and share a file",

@@ -7,6 +7,7 @@
     import type { LinkKind } from "./LinkKind";
     import { APP_ICONS, youtubeSvg } from "./appIcons";
     import { classifyChatLink, previewedLinkOf } from "./ChatLinkKind";
+    import { isGifSiteImage } from "./LinkKind";
     import type { WebPreview, YoutubePreview } from "./LinkPreviewFetcher";
     import { fetchWebPreview, fetchYoutubePreview, playingChatVideoStore } from "./LinkPreviewFetcher";
     import { IconExternalLink, IconPlayerPlayFilled } from "@wa-icons";
@@ -214,7 +215,7 @@
         data-testid="imageLinkPreview"
     >
         <img
-            class="block w-full max-h-60 object-cover"
+            class="block w-full max-h-60 {isGifSiteImage(link.url) ? 'object-contain' : 'object-cover'}"
             src={link.url}
             alt=""
             loading="lazy"
@@ -223,6 +224,9 @@
             on:error={() => (imageFailed = true)}
         />
     </a>
+{:else if link?.kind === "image" && (alone || isGifSiteImage(link.url))}
+    <!-- The picture didn't load and its address is not shown above (a lone image link, or a GIF): show it here so it is never lost. -->
+    <a class="link-preview-fallback" href={link.url} target="_blank" rel="noopener noreferrer">{link.url}</a>
 {:else if link?.kind === "web" && web && (web.title || web.description)}
     <a
         class="link-preview block !no-underline !opacity-100"
@@ -269,6 +273,13 @@
     }
     .link-preview-alone {
         margin-top: 8px;
+    }
+    .link-preview-fallback {
+        display: block;
+        padding: 8px 10px;
+        font-size: 13px;
+        overflow-wrap: anywhere;
+        text-decoration: underline;
     }
     .link-preview-mine {
         background: rgba(0, 0, 0, 0.18);

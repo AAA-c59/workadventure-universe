@@ -25,6 +25,7 @@ export const MAX_PER_GROUP = env.MAX_PER_GROUP;
 export const MAX_DISPLAYED_VIDEOS = env.MAX_DISPLAYED_VIDEOS;
 export const NODE_ENV = env.NODE_ENV;
 export const POSTHOG_API_KEY = env.POSTHOG_API_KEY;
+export const KLIPY_API_KEY = env.KLIPY_API_KEY;
 export const POSTHOG_URL = env.POSTHOG_URL;
 export const DISABLE_ANONYMOUS = env.DISABLE_ANONYMOUS;
 export const ENABLE_OPENID = env.ENABLE_OPENID;

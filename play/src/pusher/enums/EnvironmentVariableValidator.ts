@@ -305,6 +305,12 @@ export const EnvironmentVariables = z.object({
     NODE_ENV: z.string().optional().describe("Node.js environment: 'development', 'production', or 'test'"),
     CONTACT_URL: AbsoluteOrRelativeUrl.optional().describe("URL for users to contact support or administrators"),
     POSTHOG_API_KEY: z.string().optional().describe("PostHog API key for analytics tracking"),
+    KLIPY_API_KEY: z
+        .string()
+        .optional()
+        .describe(
+            "Klipy API key. When set, the chat has a GIF button that searches Klipy. Players' browsers call Klipy with this key, so it is not a secret."
+        ),
     POSTHOG_URL: z
         .string()
         .url()

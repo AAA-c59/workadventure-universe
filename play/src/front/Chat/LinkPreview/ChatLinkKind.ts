@@ -1,7 +1,7 @@
 import { connectionManager } from "../../Connection/ConnectionManager";
 import { extractChatLinks, withoutTrailingLink } from "./ChatLinks";
 import type { LinkKind } from "./LinkKind";
-import { classifyLink } from "./LinkKind";
+import { classifyLink, isGifSiteImage } from "./LinkKind";
 
 /** What a chat link is (a video, an app this room allows, an image or a web page), for its card. */
 export function classifyChatLink(url: string): LinkKind {
@@ -30,7 +30,8 @@ export function previewedLinkOf(body: string | undefined): string | undefined {
 
 /**
  * The message text as shown above its card. A video or app link that ends the message is shown by its card alone,
- * as in the approved mock. Web pages and images keep their link: their card can fail to load.
+ * as in the approved mock, and so is a GIF from a GIF site (the chat's GIF picker sends one). Web pages and other
+ * images keep their link: their card can fail to load.
  */
 export function bodyShownWithCard<Body extends string | undefined>(body: Body): Body | string {
     if (typeof body !== "string") return body;
@@ -38,7 +39,9 @@ export function bodyShownWithCard<Body extends string | undefined>(body: Body): 
         const url = previewedLinkOf(body);
         if (!url) return body;
         const kind = classifyChatLink(url).kind;
-        if (kind !== "youtube" && kind !== "app") return body;
+        // A GIF from a GIF site is the message: its address isn't shown above it.
+        const gif = kind === "image" && isGifSiteImage(url);
+        if (kind !== "youtube" && kind !== "app" && !gif) return body;
         return withoutTrailingLink(body, url) ?? body;
     } catch (error) {
         // A link the card can't read never hides the message.

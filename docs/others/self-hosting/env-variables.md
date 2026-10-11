@@ -74,6 +74,7 @@ Environment variables for the Play service (frontend and pusher).
 | `NODE_ENV` | No | Node.js environment: 'development', 'production', or 'test' |
 | `CONTACT_URL` | No | URL for users to contact support or administrators |
 | `POSTHOG_API_KEY` | No | PostHog API key for analytics tracking |
+| `KLIPY_API_KEY` | No | Klipy API key. When set, the chat has a GIF button that searches Klipy. Players' browsers call Klipy with this key, so it is not a secret. |
 | `POSTHOG_URL` | Yes | PostHog server URL for analytics. Defaults to PostHog cloud |
 | `FALLBACK_LOCALE` | No | Default locale/language code when user's locale is not available (e.g., 'en', 'fr') |
 | `ENABLE_REPORT_ISSUES_MENU` | No | Enable the 'Report Issues' menu option. Defaults to false |
