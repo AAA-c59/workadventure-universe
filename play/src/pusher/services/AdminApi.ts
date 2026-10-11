@@ -1122,6 +1122,8 @@ class AdminApi implements AdminInterface {
             const response = await axios.get<unknown>(`${ADMIN_API_URL}/api/chat/person`, {
                 headers: { Authorization: `${ADMIN_API_TOKEN}` },
                 params: { chatId, playUri },
+                // Fail fast when the admin is slow: the chat asks again later.
+                timeout: 10_000,
             });
             return ChatPersonData.parse(response.data);
         } catch (e) {

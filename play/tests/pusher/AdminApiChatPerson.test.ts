@@ -36,6 +36,7 @@ describe("AdminApi.getChatPerson", () => {
         expect(get).toHaveBeenCalledWith("http://admin.test/api/chat/person", {
             headers: { Authorization: "token" },
             params: { chatId: "@alice:chat.test", playUri },
+            timeout: 10_000,
         });
         expect(person).toEqual({ wokaName: "Alice", characterTextures: [{ id: "male1", url: "http://x/male1.png" }] });
     });
