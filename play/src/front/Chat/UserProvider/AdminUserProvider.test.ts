@@ -32,6 +32,21 @@ describe("AdminUserProvider", () => {
         unsubscribe();
     });
 
+    it("carries the name the back office has for each member as the name they go by in Universe", async () => {
+        const connection = {
+            queryChatMembers: () =>
+                Promise.resolve({ members: [member("Ada"), { ...member("Nameless"), wokaName: undefined }] }),
+        } as unknown as RoomConnection;
+        const provider = new AdminUserProvider(connection);
+        const unsubscribe = provider.users.subscribe(() => undefined);
+        await provider.setFilter("");
+
+        const [ada, nameless] = get(provider.users);
+        expect(ada.gameName).toBe("Ada");
+        expect(nameless.gameName).toBeUndefined();
+        unsubscribe();
+    });
+
     it("gives members who have a saved Woka a picture to show while they're away, and others none", async () => {
         const answer = [member("Ada", [{ id: "male1", url: "resources/male1.png" }]), member("Bob")];
         const connection = {

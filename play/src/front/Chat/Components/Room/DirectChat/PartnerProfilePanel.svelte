@@ -10,7 +10,14 @@
     } from "../../../Connection/ChatConnection";
     import type { PictureStore } from "../../../../Stores/PictureStore";
     import { notificationPlayingStore } from "../../../../Stores/NotificationStore";
-    import { PERSON_COLOUR_CONTEXT, WOKA_BY_CHAT_ID_CONTEXT, personPicture } from "../../../Stores/ChatUserWokaStore";
+    import {
+        NAME_BY_CHAT_ID_CONTEXT,
+        PERSON_COLOUR_CONTEXT,
+        WOKA_BY_CHAT_ID_CONTEXT,
+        personName,
+        personPicture,
+    } from "../../../Stores/ChatUserWokaStore";
+    import { requestChatPerson } from "../../../Stores/ChatPeopleLookup";
     import type { PersonColourOf } from "../../../Stores/ChatUserWokaStore";
     import { selectedRoomStore } from "../../../Stores/SelectRoomStore";
     import TopRowAvatar from "../../TopRow/TopRowAvatar.svelte";
@@ -53,6 +60,9 @@
     const wokaByChatId: Readable<Map<string, PictureStore>> = hasContext(WOKA_BY_CHAT_ID_CONTEXT)
         ? getContext(WOKA_BY_CHAT_ID_CONTEXT)
         : readable(new Map<string, PictureStore>());
+    const nameByChatId: Readable<Map<string, string>> = hasContext(NAME_BY_CHAT_ID_CONTEXT)
+        ? getContext(NAME_BY_CHAT_ID_CONTEXT)
+        : readable(new Map<string, string>());
     const colourOf: Readable<PersonColourOf> = hasContext(PERSON_COLOUR_CONTEXT)
         ? getContext(PERSON_COLOUR_CONTEXT)
         : readable(() => undefined);
@@ -60,6 +70,10 @@
     let confirmingDelete = false;
     let blockInProgress = false;
 
+    // Someone outside the world is asked of Orbit (once), for their Woka and the name they go by.
+    $: partnerChatId = partner.chatId;
+    $: requestChatPerson(partnerChatId);
+    $: name = personName($nameByChatId, partnerChatId, $roomName);
     $: picture = personPicture($wokaByChatId, partner.chatId, undefined) ?? room.pictureStore;
     $: status = partnerStatus(partner.place, $LL);
     $: live = isInUniverse(partner.place);
@@ -113,8 +127,8 @@
             <div class="relative mb-1.5">
                 <TopRowAvatar
                     pictureStore={picture}
-                    name={$roomName}
-                    color={$colourOf(partner.chatId, $roomName)}
+                    {name}
+                    color={$colourOf(partner.chatId, name)}
                     size="xl"
                     ring={false}
                 />
@@ -132,7 +146,7 @@
                 {/if}
             </div>
             <div class="max-w-full break-words text-lg font-bold leading-6" data-testid="partnerProfileName">
-                {$roomName}
+                {name}
             </div>
             <div class="flex max-w-full items-center gap-1.5 text-xs text-white/60" data-testid="partnerProfileStatus">
                 <span
@@ -156,7 +170,7 @@
                     </button>
                 {/if}
                 {#if partner.actions.locate}
-                    <button type="button" class="partner-tile" on:click={() => locatePartner(partner, $roomName)}>
+                    <button type="button" class="partner-tile" on:click={() => locatePartner(partner, name)}>
                         <span class="partner-tile-icon"><IconMapPin font-size="20" /></span>
                         {$LL.chat.userList.follow()}
                     </button>
@@ -203,8 +217,8 @@
                     <span class="flex min-w-0 flex-1 flex-col">
                         <span class="truncate"
                             >{partner.isBlocked
-                                ? $LL.chat.directChat.profile.unblock({ name: $roomName })
-                                : $LL.chat.directChat.profile.block({ name: $roomName })}</span
+                                ? $LL.chat.directChat.profile.unblock({ name })
+                                : $LL.chat.directChat.profile.block({ name })}</span
                         >
                         <span class="partner-hint"
                             >{partner.isBlocked
@@ -219,11 +233,11 @@
                     type="button"
                     class="u-menu-row u-danger !m-0"
                     data-testid="partnerReport"
-                    on:click={() => reportPartner(partner, $roomName)}
+                    on:click={() => reportPartner(partner, name)}
                 >
                     <span class="u-menu-tile"><IconFlag /></span>
                     <span class="flex min-w-0 flex-1 flex-col">
-                        <span class="truncate">{$LL.chat.directChat.profile.report({ name: $roomName })}</span>
+                        <span class="truncate">{$LL.chat.directChat.profile.report({ name })}</span>
                         <span class="partner-hint">{$LL.chat.directChat.profile.reportHint()}</span>
                     </span>
                 </button>
@@ -231,8 +245,7 @@
             {#if confirmingDelete}
                 <div class="flex flex-col gap-2 p-2 text-sm" data-testid="partnerDeleteConfirm">
                     <span class="font-bold">{$LL.chat.directChat.deleteChat.confirm()}</span>
-                    <span class="text-xs text-white/60">{$LL.chat.directChat.deleteChat.hint({ name: $roomName })}</span
-                    >
+                    <span class="text-xs text-white/60">{$LL.chat.directChat.deleteChat.hint({ name })}</span>
                     <div class="flex gap-2">
                         <button
                             type="button"
@@ -258,7 +271,7 @@
                     <span class="u-menu-tile"><IconTrash /></span>
                     <span class="flex min-w-0 flex-1 flex-col">
                         <span class="truncate">{$LL.chat.directChat.deleteChat.label()}</span>
-                        <span class="partner-hint">{$LL.chat.directChat.deleteChat.hint({ name: $roomName })}</span>
+                        <span class="partner-hint">{$LL.chat.directChat.deleteChat.hint({ name })}</span>
                     </span>
                 </button>
             {/if}

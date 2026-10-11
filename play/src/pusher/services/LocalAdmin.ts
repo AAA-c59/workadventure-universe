@@ -52,7 +52,7 @@ import { MetaTagsDefaultValue } from "./MetaTagsBuilder";
 import { localCompanionService } from "./LocalCompanionSevice";
 import type { ShortMapDescription, ShortMapDescriptionList } from "./ShortMapDescription";
 import type { UniverseRoomsData } from "./UniverseRooms";
-import type { WorldChatMembersData } from "./WorldChatMembersData";
+import type { ChatPersonData, WorldChatMembersData } from "./WorldChatMembersData";
 import { iceServersService } from "./IceServersService";
 
 /**
@@ -451,6 +451,10 @@ class LocalAdmin implements AdminInterface {
             members: [],
             total: 0,
         });
+    }
+
+    getChatPerson(chatId: string, playUri: string): Promise<ChatPersonData | undefined> {
+        return Promise.resolve(undefined);
     }
 
     updateChatId(userIdentifier: string, chatId: string): Promise<void> {

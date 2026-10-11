@@ -948,6 +948,18 @@ export class IoSocketController {
                                             this.sendAnswerMessage(socket, answerMessage);
                                             break;
                                         }
+                                        case "chatPersonQuery": {
+                                            const chatPersonAnswer = await socketManager.handleChatPersonQuery(
+                                                socket,
+                                                message.message.queryMessage.query.chatPersonQuery
+                                            );
+                                            answerMessage.answer = {
+                                                $case: "chatPersonAnswer",
+                                                chatPersonAnswer,
+                                            };
+                                            this.sendAnswerMessage(socket, answerMessage);
+                                            break;
+                                        }
                                         case "searchTagsQuery": {
                                             const searchTagsAnswer = await socketManager.handleSearchTagsQuery(
                                                 socket,

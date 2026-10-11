@@ -19,11 +19,14 @@
     import { areaChatRooms } from "../../Stores/AreaPresenceStore";
     import {
         PERSON_COLOUR_CONTEXT,
+        NAME_BY_CHAT_ID_CONTEXT,
         WOKA_BY_CHAT_ID_CONTEXT,
         createColourByChatIdStore,
+        createNameByChatIdStore,
         createWokaByChatIdStore,
         personColour,
     } from "../../Stores/ChatUserWokaStore";
+    import { currentChatPeople } from "../../Stores/ChatPeopleLookup";
     import type { PersonColourOf } from "../../Stores/ChatUserWokaStore";
     import Room from "../Room/Room.svelte";
     import RoomInvitation from "../Room/RoomInvitation.svelte";
@@ -62,7 +65,17 @@
     const orderFreeze = new OrderFreeze();
     setContext(ONE_LIST_FREEZE_CONTEXT, orderFreeze);
     // One lookup for every row: direct chats show the other person's woka when the room has no picture.
-    setContext(WOKA_BY_CHAT_ID_CONTEXT, createWokaByChatIdStore(gameManager.getCurrentGameScene().userProviderMerger));
+    // People outside the world (a direct chat with someone away) are asked of Orbit and fill in what the world lacks.
+    const chatPeople = currentChatPeople();
+    setContext(
+        WOKA_BY_CHAT_ID_CONTEXT,
+        createWokaByChatIdStore(gameManager.getCurrentGameScene().userProviderMerger, chatPeople?.store)
+    );
+    // The name each person goes by in Universe, so a rename in the game shows in the chat.
+    setContext(
+        NAME_BY_CHAT_ID_CONTEXT,
+        createNameByChatIdStore(gameManager.getCurrentGameScene().userProviderMerger, chatPeople?.store)
+    );
     // A direct chat's row shows the other person's woka on their colour from People, as inside the chat.
     setContext<Readable<PersonColourOf>>(
         PERSON_COLOUR_CONTEXT,

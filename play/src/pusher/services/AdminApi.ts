@@ -38,7 +38,7 @@ import type { AuthTokenData } from "./JWTTokenManager";
 import { jwtTokenManager } from "./JWTTokenManager";
 import { ShortMapDescriptionList } from "./ShortMapDescription";
 import { UniverseRoomsData } from "./UniverseRooms";
-import { WorldChatMembersData } from "./WorldChatMembersData";
+import { ChatPersonData, WorldChatMembersData } from "./WorldChatMembersData";
 import { iceServersService } from "./IceServersService";
 import type { BanAppealResult } from "./BanDetails";
 import { BanDetailsData } from "./BanDetails";
@@ -1087,6 +1087,48 @@ class AdminApi implements AdminInterface {
         });
 
         return WorldChatMembersData.parse(response.data);
+    }
+
+    /**
+     * @openapi
+     * /api/chat/person:
+     *   get:
+     *     tags: ["AdminAPI"]
+     *     description: One person's current name and Woka by chat ID, for a direct chat with someone outside the asker's world. Never an email address or an id.
+     *     security:
+     *      - Bearer: []
+     *     produces:
+     *      - "application/json"
+     *     parameters:
+     *      - name: "chatId"
+     *        in: "query"
+     *        description: "The person's chat ID (Matrix user ID)"
+     *        type: "string"
+     *        required: true
+     *        example: "@john.doe:matrix.org"
+     *      - name: "playUri"
+     *        in: "query"
+     *        description: "The room the asker is in; its world decides which Woka is sent"
+     *        type: "string"
+     *        example: "https://play.workadventu.re/@/teamSlug/worldSlug/roomSlug"
+     *     responses:
+     *       200:
+     *         description: The person's name and Woka (bottom layer first; empty when there is none to show)
+     *       404:
+     *         description: No one has this chat ID
+     */
+    async getChatPerson(chatId: string, playUri: string): Promise<ChatPersonData | undefined> {
+        try {
+            const response = await axios.get<unknown>(`${ADMIN_API_URL}/api/chat/person`, {
+                headers: { Authorization: `${ADMIN_API_TOKEN}` },
+                params: { chatId, playUri },
+            });
+            return ChatPersonData.parse(response.data);
+        } catch (e) {
+            // No one has this chat ID (or an older admin has no such lookup): the chat keeps what it has.
+            if (isAxiosError(e) && e.response?.status === 404) return undefined;
+            throw e;
+        }
     }
 
     /**
