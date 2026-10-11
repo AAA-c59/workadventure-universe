@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { tick } from "svelte";
 // Svelte has no public way to run its pending updates now, which is what a real click gives it between listeners.
@@ -363,6 +364,17 @@ describe("GifPicker", () => {
             await settle();
             const image = target.querySelector('[data-testid="gifPickerTrending"] img');
             expect(image?.getAttribute("src")).toBe("https://static.klipy.com/t-sm.webp");
+        });
+
+        it("paints the Trending tile like the other tiles, with no gradient layer over it", () => {
+            // A gradient cannot fade to the flat colour of the hover and pressed looks: the layer would vanish for the
+            // length of the transition and the GIF would flash at full brightness. jsdom does not apply the styles, so
+            // this reads the rules.
+            const source = readFileSync("src/front/Chat/Gif/GifPicker.svelte", "utf8");
+            const afterRules = [...source.matchAll(/\.tile[^{}]*::after\s*\{([^}]*)\}/g)].map((match) => match[0]);
+            expect(afterRules.length).toBeGreaterThan(0);
+            for (const rule of afterRules) expect(rule).not.toMatch(/gradient/);
+            expect(source).not.toMatch(/\.tile\.trending[^{]*::after/);
         });
 
         it("shows grey boxes, not a spinner, while a search loads", async () => {

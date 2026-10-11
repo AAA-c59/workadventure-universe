@@ -665,10 +665,6 @@
         background: rgba(0, 0, 0, 0.36);
         transition: background 0.12s;
     }
-    /* Trending has a GIF behind it like the others, under the blue of the tile gradient. */
-    .tile.trending::after {
-        background: linear-gradient(135deg, rgba(65, 86, 246, 0.55), rgba(10, 8, 20, 0.45));
-    }
     /* The white edge of a hovered or held tile. */
     .tile::before {
         content: "";
@@ -696,8 +692,7 @@
     .tile:active {
         transform: scale(0.96);
     }
-    .tile:active::after,
-    .tile.trending:active::after {
+    .tile:active::after {
         background: rgba(0, 0, 0, 0.7);
     }
     .tile:active img {
@@ -775,8 +770,7 @@
     }
     /* A hover look on a phone would stay on the last thing tapped: only where there is a mouse. */
     @media (hover: hover) {
-        .tile:hover::after,
-        .tile.trending:hover::after {
+        .tile:hover::after {
             background: rgba(10, 8, 20, 0.55);
         }
         .tile:hover img {
