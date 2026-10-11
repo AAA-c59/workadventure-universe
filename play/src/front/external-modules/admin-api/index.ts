@@ -180,19 +180,33 @@ function handleAdminAuthMessage(event: MessageEvent<unknown>) {
     });
 }
 
+/**
+ * How long an invite or a chat from Orbit waits for the room's connection. Closing Orbit applies a name saved there
+ * by rejoining the room, which drops the connection until the new one is up.
+ */
+const ROOM_CONNECTION_WAIT_MS = 15_000;
+
 /** Orbit asked to invite someone over: Orbit closes so the invite and its answer are seen, and the game invites them. */
 function invitePersonFromOrbit(uuid: string, name: string) {
     // Not yourself, and not someone you blocked here (the People tab offers neither).
     if (uuid === localUserStore.getLocalUser()?.uuid || blackListManager.isBlackListed(uuid)) return;
     closeAdminModal();
-    ringStore.ring(uuid, name).catch((error) => console.error("Could not invite from Orbit", error));
+    // After closing, so a rejoin for a new name has already dropped the old connection and the invite uses the new one.
+    ringStore
+        .whenConnected(ROOM_CONNECTION_WAIT_MS)
+        .then(() => ringStore.ring(uuid, name))
+        .catch((error) => console.error("Could not invite from Orbit", error));
 }
 
 /** Orbit asked to message someone: Orbit closes and the game opens their chat. */
 function messagePersonFromOrbit(chatId: string) {
     if (chatId === localUserStore.getChatId()) return;
     closeAdminModal();
-    openDirectChatRoom(chatId).catch((error) => console.error("Could not open the chat from Orbit", error));
+    // Like an invite, it waits out a rejoin so the chat opens in the room you end up in.
+    ringStore
+        .whenConnected(ROOM_CONNECTION_WAIT_MS)
+        .then(() => openDirectChatRoom(chatId))
+        .catch((error) => console.error("Could not open the chat from Orbit", error));
 }
 
 /**

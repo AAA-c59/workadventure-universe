@@ -57,6 +57,30 @@ describe("ringStore", () => {
         expect(get(store.outgoing).has("sara")).toBe(false);
     });
 
+    it("whenConnected resolves at once with a connection, else on the next one, else false after the wait", async () => {
+        const store = createRingStore();
+        const first = fakeConnection(ringing);
+        store.attach(first.connection);
+        expect(await store.whenConnected(1000)).toBe(true);
+
+        // A rejoin closes the connection; a request made now waits for the new one.
+        store.detach(first.connection);
+        const arrived = store.whenConnected(1000);
+        const second = fakeConnection(ringing);
+        store.attach(second.connection);
+        expect(await arrived).toBe(true);
+
+        // Nothing arrives in time.
+        store.detach(second.connection);
+        const lost = store.whenConnected(1000);
+        vi.advanceTimersByTime(1000);
+        expect(await lost).toBe(false);
+
+        // A connection that comes after the wait is over is not mistaken for an answer to it.
+        store.attach(fakeConnection(ringing).connection);
+        expect(await store.whenConnected(1000)).toBe(true);
+    });
+
     it("says on the way, then that they came over", async () => {
         const store = createRingStore();
         const { connection, updates, queryRing } = fakeConnection(ringing);
