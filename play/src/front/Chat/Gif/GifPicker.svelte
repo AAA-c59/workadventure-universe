@@ -509,7 +509,7 @@
                 </div>
             {:else if failed}
                 <div class="state" role="alert" data-testid="gifPickerError">
-                    <IconWifiOff font-size={28} />
+                    <span class="state-icon"><IconWifiOff font-size={28} /></span>
                     <span class="big">{$LL.chat.gifPicker.loadError()}</span>
                     <span>{$LL.chat.gifPicker.loadErrorHint()}</span>
                     <button type="button" class="u-cta-secondary retry" on:click={retry}>
@@ -843,6 +843,10 @@
         font-size: 14px;
         text-align: center;
         color: rgba(255, 255, 255, 0.62);
+    }
+    .state-icon {
+        display: grid;
+        color: white;
     }
     .state .big {
         font-size: 15px;
