@@ -35,6 +35,8 @@
     let empty = false;
     let scroller: HTMLDivElement;
     let searchInput: HTMLInputElement;
+    // Whether this search box is what turned the game's keys off: only then is it for the picker to turn them on.
+    let searchFocused = false;
     let abort: AbortController | undefined;
     let debounce: ReturnType<typeof setTimeout> | undefined;
     // A new request makes the one before it stale, whatever order they answer in.
@@ -186,8 +188,9 @@
     onDestroy(() => {
         clearTimeout(debounce);
         abort?.abort();
-        // A search box that was focused when the picker closed doesn't send its blur.
-        chatInputFocusStore.set(false);
+        // A search box that was focused when the picker closed doesn't send its blur. If the focus went to the
+        // message box meanwhile (a sent GIF), that box has turned the keys off and keeps them so.
+        if (searchFocused) chatInputFocusStore.set(false);
     });
 </script>
 
@@ -235,8 +238,14 @@
                 data-testid="gifPickerSearch"
                 on:input={onInput}
                 on:keydown={onSearchKey}
-                on:focus={() => chatInputFocusStore.set(true)}
-                on:blur={() => chatInputFocusStore.set(false)}
+                on:focus={() => {
+                    searchFocused = true;
+                    chatInputFocusStore.set(true);
+                }}
+                on:blur={() => {
+                    searchFocused = false;
+                    chatInputFocusStore.set(false);
+                }}
             />
             {#if query !== ""}
                 <button

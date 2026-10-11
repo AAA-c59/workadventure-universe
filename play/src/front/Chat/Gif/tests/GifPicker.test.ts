@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { tick } from "svelte";
+import { get } from "svelte/store";
 
 vi.mock("../../../Enum/EnvironmentVariable", () => ({ KLIPY_API_KEY: "test-key" }));
 vi.mock("../../../Stores/ChatStore", async () => {
@@ -28,6 +29,7 @@ vi.mock("../../../../i18n/i18n-svelte", async () => {
     };
 });
 
+import { chatInputFocusStore } from "../../../Stores/ChatStore";
 import GifPicker from "../GifPicker.svelte";
 import type { GifItem, GifPage, KlipyClient } from "../KlipyClient";
 
@@ -197,5 +199,25 @@ describe("GifPicker", () => {
             item.getAttribute("aria-label")
         );
         expect(labels).toEqual(["Send GIF gif new"]);
+    });
+
+    it("turns the game's keys off while its search box is focused, and back on when it closes", () => {
+        mount(fakeClient());
+        input().dispatchEvent(new FocusEvent("focus"));
+        expect(get(chatInputFocusStore)).toBe(true);
+        picker?.$destroy();
+        picker = undefined;
+        expect(get(chatInputFocusStore)).toBe(false);
+    });
+
+    it("leaves the keys as they are when the message box took the focus (a sent GIF)", () => {
+        mount(fakeClient());
+        input().dispatchEvent(new FocusEvent("focus"));
+        input().dispatchEvent(new FocusEvent("blur"));
+        // The message box is focused next, and turns the keys off.
+        chatInputFocusStore.set(true);
+        picker?.$destroy();
+        picker = undefined;
+        expect(get(chatInputFocusStore)).toBe(true);
     });
 });
