@@ -228,7 +228,8 @@
             showMyself(user.uuid ?? undefined);
             return;
         }
-        if (user.uuid == undefined) return;
+        // Members with no map to show (away, or not in this world) have no card to open.
+        if (user.uuid == undefined || !user.playUri) return;
         // Track the open woka menu action
         analyticsClient.openWokaMenu();
         // On a phone the sidebar makes way for their card, and comes back when the card is closed.
