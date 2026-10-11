@@ -52,7 +52,13 @@ const ACCESS_TOKEN_MARGIN_MS = 60_000;
  * The /me renewal in flight, shared by every request made with the same game token (Orbit's frame and the bot
  * editor alike). A forced request doesn't join an unforced one: that one may hand back the very token just refused.
  */
-let renewal: { gameToken: string; force: boolean; promise: Promise<string | null> } | null = null;
+let renewal: {
+    gameToken: string;
+    force: boolean;
+    promise: Promise<string | null>;
+    /** Every caller waiting on this renewal: its answer is kept while any one of them still wants it. */
+    wanted: Set<() => boolean>;
+} | null = null;
 
 /** Forgets the renewal in flight, so a late answer isn't shared with the next room's requests. */
 export function forgetOrbitAccessTokenRenewal(): void {
@@ -123,11 +129,18 @@ export async function freshOrbitAccessToken(
     if (!force && !stale) return current;
 
     let inFlight = renewal?.gameToken === gameToken && (renewal.force || !force) ? renewal : null;
-    if (!inFlight) {
-        const promise: Promise<string | null> = renewGameToken(holder, gameToken, force, isCurrent).finally(() => {
+    if (inFlight) {
+        // Whoever started it may be gone by the time it answers (the player moved to another room): this caller
+        // still wants the answer.
+        inFlight.wanted.add(isCurrent);
+    } else {
+        const wanted = new Set([isCurrent]);
+        const promise: Promise<string | null> = renewGameToken(holder, gameToken, force, () =>
+            [...wanted].some((stillWanted) => stillWanted())
+        ).finally(() => {
             if (renewal?.promise === promise) renewal = null;
         });
-        inFlight = renewal = { gameToken, force, promise };
+        inFlight = renewal = { gameToken, force, promise, wanted };
     }
     const renewed = await inFlight.promise;
     // Torn down or signed out meanwhile: nothing to hand out.
