@@ -29,7 +29,7 @@
     let web: WebPreview | undefined;
     let video: YoutubePreview = {};
     let imageFailed = false;
-    let gifOpen = false;
+    let pictureOpen = false;
     let loadedFor: string | undefined;
 
     $: firstLink = previewedLinkOf(body ?? "");
@@ -42,7 +42,7 @@
         web = undefined;
         video = {};
         imageFailed = false;
-        gifOpen = false;
+        pictureOpen = false;
         if (!url) return;
 
         const kind = classifyChatLink(url);
@@ -92,11 +92,11 @@
         }
     }
 
-    /** A GIF opens in the picture viewer, as an uploaded picture does. Other picture links keep opening a new tab. */
-    function openGif(event: MouseEvent) {
-        if (link?.kind !== "image" || !isGifSiteImage(link.url)) return;
+    /** A picture opens in the picture viewer, as an uploaded picture does. The link in the message text stays a link. */
+    function openPicture(event: MouseEvent) {
+        if (link?.kind !== "image") return;
         event.preventDefault();
-        gifOpen = true;
+        pictureOpen = true;
     }
 
     $: playing = $playingChatVideoStore === previewId;
@@ -222,7 +222,7 @@
         href={link.url}
         target="_blank"
         rel="noopener noreferrer"
-        on:click={openGif}
+        on:click={openPicture}
         data-testid="imageLinkPreview"
     >
         <img
@@ -235,9 +235,7 @@
             on:error={() => (imageFailed = true)}
         />
     </a>
-    {#if isGifSiteImage(link.url)}
-        <Lightbox src={link.url} alt="GIF" show={gifOpen} on:close={() => (gifOpen = false)} />
-    {/if}
+    <Lightbox src={link.url} alt="" show={pictureOpen} on:close={() => (pictureOpen = false)} />
 {:else if link?.kind === "image" && (alone || isGifSiteImage(link.url))}
     <!-- The picture didn't load and its address is not shown above (a lone image link, or a GIF): show it here so it is never lost. -->
     <a class="link-preview-fallback" href={link.url} target="_blank" rel="noopener noreferrer">{link.url}</a>
