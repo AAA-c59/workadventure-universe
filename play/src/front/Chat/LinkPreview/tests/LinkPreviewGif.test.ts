@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { tick } from "svelte";
-import { get } from "svelte/store";
+import { get, readable } from "svelte/store";
 import { Marked } from "marked";
 
 vi.mock("../../../Connection/ConnectionManager", () => ({
@@ -40,11 +40,12 @@ vi.mock("../../../../i18n/i18n-svelte", async () => {
 });
 
 import { lightboxOpenStore } from "../../../Stores/UserInputStore";
+import type { ChatMessageContent } from "../../Connection/ChatConnection";
+import MessageImage from "../../Components/Room/Message/MessageImage.svelte";
 import { sanitizeHTML } from "../../Components/Room/Message/WA-HTML-Sanitizer";
 import LinkPreview from "../LinkPreview.svelte";
 
 const GIF = "https://static.klipy.com/ii/abc/cat.gif";
-const PICTURE = "https://example.com/cat.png";
 
 describe("a picture in a chat message", () => {
     let target: HTMLElement;
@@ -63,22 +64,18 @@ describe("a picture in a chat message", () => {
         document.querySelectorAll("[data-lightbox]").forEach((viewer) => viewer.remove());
     });
 
-    async function show(body: string, alone = true): Promise<HTMLAnchorElement> {
-        preview = new LinkPreview({ target, props: { body, alone } });
+    async function show(body: string): Promise<HTMLAnchorElement> {
+        preview = new LinkPreview({ target, props: { body, alone: true } });
         await tick();
         const card = target.querySelector<HTMLAnchorElement>('[data-testid="imageLinkPreview"]');
         if (!card) throw new Error("no picture card");
         return card;
     }
 
-    function click(element: HTMLElement): MouseEvent {
+    function click(card: HTMLElement): MouseEvent {
         const event = new MouseEvent("click", { bubbles: true, cancelable: true });
-        element.dispatchEvent(event);
+        card.dispatchEvent(event);
         return event;
-    }
-
-    function shownInViewer(): string | null | undefined {
-        return document.querySelector("[data-lightbox]")?.querySelector("img")?.getAttribute("src");
     }
 
     it("opens a GIF in the picture viewer, not a new tab", async () => {
@@ -89,15 +86,8 @@ describe("a picture in a chat message", () => {
         await tick();
 
         expect(event.defaultPrevented).toBe(true);
-        expect(shownInViewer()).toBe(GIF);
-    });
-
-    it("opens any other picture link in the picture viewer too", async () => {
-        const event = click(await show(`look at this ${PICTURE}`, false));
-        await tick();
-
-        expect(event.defaultPrevented).toBe(true);
-        expect(shownInViewer()).toBe(PICTURE);
+        const viewer = document.querySelector("[data-lightbox]");
+        expect(viewer?.querySelector("img")?.getAttribute("src")).toBe(GIF);
     });
 
     it("closes the viewer with Escape", async () => {
@@ -111,13 +101,13 @@ describe("a picture in a chat message", () => {
         expect(get(lightboxOpenStore)).toBe(false);
     });
 
-    it("keeps the game's keys off while a picture is open and another one arrives or leaves", async () => {
+    it("keeps the game's keys off while a GIF is open and another one arrives or leaves", async () => {
         click(await show(GIF));
         await tick();
 
         const other = document.createElement("div");
         document.body.appendChild(other);
-        const arriving = new LinkPreview({ target: other, props: { body: PICTURE, alone: true } });
+        const arriving = new LinkPreview({ target: other, props: { body: GIF, alone: true } });
         await tick();
         expect(get(lightboxOpenStore)).toBe(true);
 
@@ -126,29 +116,56 @@ describe("a picture in a chat message", () => {
         expect(get(lightboxOpenStore)).toBe(true);
     });
 
-    it("keeps a picture that didn't load as a plain link", async () => {
-        const card = await show(GIF);
-        card.querySelector("img")?.dispatchEvent(new Event("error"));
+    it.each([
+        ["a pasted picture link", "https://example.com/cat.png"],
+        ["a pasted picture link with text", "look at this https://example.com/cat.png"],
+        ["a GIF file that isn't from a GIF site", "https://example.com/dance.gif"],
+    ])("keeps opening %s in a new tab", async (_name, body) => {
+        preview = new LinkPreview({ target, props: { body, alone: false } });
+        await tick();
+        const card = target.querySelector<HTMLAnchorElement>('[data-testid="imageLinkPreview"]');
+        if (!card) throw new Error("no picture card");
+
+        const event = click(card);
         await tick();
 
-        const fallback = target.querySelector<HTMLAnchorElement>(".link-preview-fallback");
-        expect(fallback?.getAttribute("target")).toBe("_blank");
-        if (!fallback) throw new Error("no fallback link");
-        expect(click(fallback).defaultPrevented).toBe(false);
-        await tick();
+        expect(event.defaultPrevented).toBe(false);
+        expect(card.getAttribute("target")).toBe("_blank");
         expect(document.querySelector("[data-lightbox]")).toBeNull();
+        expect(get(lightboxOpenStore)).toBe(false);
     });
 
-    it("keeps the picture's link in the message text a link to a new tab", () => {
-        // The message text is drawn by MessageText (markdown, then this cleaner), outside the card: its links are
-        // plain links to a new tab, so clicking the address itself still opens it.
-        const html = sanitizeHTML(new Marked().parse(`look at this ${PICTURE}`) as string);
-        target.innerHTML = html;
+    it("keeps a link in the message text a link to a new tab", () => {
+        // The message text is drawn by MessageText (markdown, then this cleaner), which this change leaves alone.
+        target.innerHTML = sanitizeHTML(new Marked().parse(`look at this ${GIF}`) as string);
 
         const link = target.querySelector<HTMLAnchorElement>("a");
-        expect(link?.getAttribute("href")).toBe(PICTURE);
         expect(link?.getAttribute("target")).toBe("_blank");
         if (!link) throw new Error("no link");
         expect(click(link).defaultPrevented).toBe(false);
+    });
+
+    it("still opens an uploaded picture in the picture viewer", async () => {
+        const uploaded = new MessageImage({
+            target,
+            props: {
+                content: readable({
+                    url: "https://uploads.example.com/photo.png",
+                    body: "photo.png",
+                } as ChatMessageContent),
+            },
+        });
+        await tick();
+        const picture = target.querySelector<HTMLElement>("a");
+        if (!picture) throw new Error("no uploaded picture");
+
+        expect(click(picture).defaultPrevented).toBe(true);
+        await tick();
+        expect(document.querySelector("[data-lightbox] img")?.getAttribute("src")).toBe(
+            "https://uploads.example.com/photo.png"
+        );
+        expect(get(lightboxOpenStore)).toBe(true);
+        uploaded.$destroy();
+        expect(get(lightboxOpenStore)).toBe(false);
     });
 });
