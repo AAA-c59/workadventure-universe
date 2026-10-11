@@ -12,7 +12,7 @@ import type { AdminBannedData, FetchMemberDataByUuidResponse } from "./AdminApi"
 import type { BanAppealResult, BanDetailsData } from "./BanDetails";
 import type { ShortMapDescriptionList } from "./ShortMapDescription";
 import type { UniverseRoomsData } from "./UniverseRooms";
-import type { WorldChatMembersData } from "./WorldChatMembersData";
+import type { ChatPersonData, WorldChatMembersData } from "./WorldChatMembersData";
 
 export interface AdminInterface {
     /**
@@ -149,6 +149,12 @@ export interface AdminInterface {
     getMember(memberUUID: string, roomUrl?: string): Promise<MemberData>;
 
     getWorldChatMembers(playUri: string, searchText: string): Promise<WorldChatMembersData>;
+
+    /**
+     * One person's current name and Woka by chat ID, as the back office shows them from the asker's room. Undefined
+     * when the back office has no one with that chat ID.
+     */
+    getChatPerson(chatId: string, playUri: string): Promise<ChatPersonData | undefined>;
 
     updateChatId(userIdentifier: string, chatId: string, roomUrl: string): Promise<void>;
 

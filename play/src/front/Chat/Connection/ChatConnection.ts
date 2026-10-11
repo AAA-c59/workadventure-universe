@@ -16,6 +16,8 @@ export type ChatUser = {
     pictureStore: PictureStore | undefined;
     /** Their saved Woka, drawn only when shown: what a person who is away looks like, until they have a live one. */
     storedWoka?: PictureStore;
+    /** The name they go by in Universe (the game's, or the back office's), never the chat account's. */
+    gameName?: string;
     roomName: string | undefined;
     playUri: string | undefined;
     isAdmin?: boolean;
@@ -35,6 +37,8 @@ export type AdminUser = {
     pictureStore: PictureStore | undefined;
     /** Their saved Woka, drawn only when shown: what a person who is away looks like, until they have a live one. */
     storedWoka?: PictureStore;
+    /** The name they go by in Universe (the game's, or the back office's), never the chat account's. */
+    gameName?: string;
     roomName: string | undefined;
     playUri: string | undefined;
     isAdmin?: boolean;

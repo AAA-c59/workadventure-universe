@@ -5,7 +5,14 @@
     import LL from "../../../../../i18n/i18n-svelte";
     import type { ChatRoom } from "../../../Connection/ChatConnection";
     import type { PictureStore } from "../../../../Stores/PictureStore";
-    import { PERSON_COLOUR_CONTEXT, WOKA_BY_CHAT_ID_CONTEXT, personPicture } from "../../../Stores/ChatUserWokaStore";
+    import {
+        NAME_BY_CHAT_ID_CONTEXT,
+        PERSON_COLOUR_CONTEXT,
+        WOKA_BY_CHAT_ID_CONTEXT,
+        personName,
+        personPicture,
+    } from "../../../Stores/ChatUserWokaStore";
+    import { requestChatPerson } from "../../../Stores/ChatPeopleLookup";
     import type { PersonColourOf } from "../../../Stores/ChatUserWokaStore";
     import TopRowAvatar from "../../TopRow/TopRowAvatar.svelte";
     import type { DirectPartner } from "./DirectPartnerStore";
@@ -26,10 +33,17 @@
     const wokaByChatId: Readable<Map<string, PictureStore>> = hasContext(WOKA_BY_CHAT_ID_CONTEXT)
         ? getContext(WOKA_BY_CHAT_ID_CONTEXT)
         : readable(new Map<string, PictureStore>());
+    const nameByChatId: Readable<Map<string, string>> = hasContext(NAME_BY_CHAT_ID_CONTEXT)
+        ? getContext(NAME_BY_CHAT_ID_CONTEXT)
+        : readable(new Map<string, string>());
     const colourOf: Readable<PersonColourOf> = hasContext(PERSON_COLOUR_CONTEXT)
         ? getContext(PERSON_COLOUR_CONTEXT)
         : readable(() => undefined);
 
+    // Someone outside the world is asked of Orbit (once), for their Woka and the name they go by.
+    $: partnerChatId = partner.chatId;
+    $: requestChatPerson(partnerChatId);
+    $: name = personName($nameByChatId, partnerChatId, $roomName);
     $: picture = personPicture($wokaByChatId, partner.chatId, undefined) ?? room.pictureStore;
     $: status = partnerStatus(partner.place, $LL);
     $: live = isInUniverse(partner.place);
@@ -38,17 +52,12 @@
 <button
     type="button"
     class="m-0 flex min-w-0 max-w-full items-center gap-2.5 rounded-xl py-1 pe-2 ps-1 text-start text-white [font:inherit] hover:bg-white/10"
-    aria-label={$LL.chat.directChat.openProfile({ name: $roomName })}
+    aria-label={$LL.chat.directChat.openProfile({ name })}
     data-testid="openPartnerProfile"
     on:click={() => dispatch("openProfile")}
 >
     <span class="relative flex shrink-0" aria-hidden="true">
-        <TopRowAvatar
-            pictureStore={picture}
-            name={$roomName}
-            color={$colourOf(partner.chatId, $roomName)}
-            ring={false}
-        />
+        <TopRowAvatar pictureStore={picture} {name} color={$colourOf(partner.chatId, name)} ring={false} />
         {#if live}
             <span
                 class="absolute -inset-1 rounded-full border-2 border-solid"
@@ -59,7 +68,7 @@
     </span>
     <span class="flex min-w-0 flex-col">
         <span class="flex min-w-0 items-center gap-1.5">
-            <span class="truncate text-md font-bold leading-5" data-testid="roomName">{$roomName}</span>
+            <span class="truncate text-md font-bold leading-5" data-testid="roomName">{name}</span>
             {#if $isEncrypted}
                 <span
                     class="shrink-0 text-white/50"

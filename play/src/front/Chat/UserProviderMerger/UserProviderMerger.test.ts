@@ -167,3 +167,40 @@ describe("UserProviderMerger pictures", () => {
         expect(pictureOf(merger)).toBe("live-woka");
     });
 });
+
+describe("UserProviderMerger names in Universe", () => {
+    const provider = (users: PartialChatUser[]): UserProviderInterface => ({
+        users: writable(users),
+        setFilter: () => Promise.resolve(),
+    });
+    const onlyUser = (merger: UserProviderMerger) =>
+        [...get(merger.usersByRoomStore).values()].flatMap((room) => room.users)[0];
+
+    it("keeps the name the back office has apart from the chat account's, which was copied once", () => {
+        const merger = new UserProviderMerger([
+            provider([{ chatId: "@ada:chat", username: "Ada Lovelace", gameName: "Ada" }]),
+            provider([{ chatId: "@ada:chat", username: "Ada Lovelace (account)" }]),
+        ]);
+        expect(onlyUser(merger).gameName).toBe("Ada");
+    });
+
+    it("takes the live name in the world over the back office's", () => {
+        const merger = new UserProviderMerger([
+            provider([{ chatId: "@ada:chat", username: "Ada", gameName: "Ada" }]),
+            provider([{ chatId: "@ada:chat", username: "Ada (account)" }]),
+            provider([{ chatId: "@ada:chat", username: "Countess", gameName: "Countess", spaceUserId: "space-1" }]),
+        ]);
+        expect(onlyUser(merger).gameName).toBe("Countess");
+    });
+
+    it("has no name in Universe for someone only the chat knows, and keeps their saved Woka for the chat to tell who the world covers", () => {
+        const stored = readable<string | undefined>("stored-woka");
+        const merger = new UserProviderMerger([
+            provider([{ chatId: "@ada:chat", username: "Ada", storedWoka: stored }]),
+            provider([{ chatId: "@bob:chat", username: "Bob (account)" }]),
+        ]);
+        const users = [...get(merger.usersByRoomStore).values()].flatMap((room) => room.users);
+        expect(users.find((user) => user.chatId === "@bob:chat")?.gameName).toBeUndefined();
+        expect(users.find((user) => user.chatId === "@ada:chat")?.storedWoka).toBe(stored);
+    });
+});

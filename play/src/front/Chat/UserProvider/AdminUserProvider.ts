@@ -40,6 +40,7 @@ export class AdminUserProvider implements UserProviderInterface {
                     roomName: undefined,
                     playUri: undefined,
                     username: currentMember.wokaName,
+                    gameName: currentMember.wokaName || undefined,
                     isAdmin: currentMember.tags.includes("admin"),
                     isMember: currentMember.tags.includes("member"),
                     uuid: undefined,

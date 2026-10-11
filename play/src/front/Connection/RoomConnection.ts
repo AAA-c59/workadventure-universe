@@ -10,6 +10,7 @@ import type {
     AvailabilityStatus,
     CharacterTextureMessage,
     ChatMembersAnswer,
+    ChatPersonAnswer,
     CompanionTextureMessage,
     DeleteCustomEntityMessage,
     EditMapCommandMessage,
@@ -1791,6 +1792,20 @@ export class RoomConnection implements RoomConnection {
             throw new Error("Unexpected answer");
         }
         return answer.chatMembersAnswer;
+    }
+
+    /** One person's current name and Woka by chat ID, for a direct chat with someone outside your world. */
+    public async queryChatPerson(chatId: string): Promise<ChatPersonAnswer> {
+        const answer = await this.query({
+            $case: "chatPersonQuery",
+            chatPersonQuery: {
+                chatId,
+            },
+        });
+        if (answer.$case !== "chatPersonAnswer") {
+            throw new Error("Unexpected answer");
+        }
+        return answer.chatPersonAnswer;
     }
 
     public async getOauthRefreshToken(

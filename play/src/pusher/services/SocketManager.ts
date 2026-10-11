@@ -11,6 +11,8 @@ import type {
     BanPlayerMessage,
     ChatMembersAnswer,
     ChatMembersQuery,
+    ChatPersonAnswer,
+    ChatPersonQuery,
     EmoteEventMessage,
     ErrorApiData,
     ErrorMessage,
@@ -1860,6 +1862,21 @@ export class SocketManager implements ZoneEventListener {
         return {
             total,
             members,
+        };
+    }
+
+    /**
+     * One person's current name and Woka by chat ID, for a direct chat with someone outside the player's world. Only
+     * for signed-in players. Anyone the admin does not know is an answer without a name or a Woka (the chat keeps what
+     * it has); when the admin cannot answer at all the query fails, and the chat asks again a minute later.
+     */
+    async handleChatPersonQuery(client: Socket, chatPersonQuery: ChatPersonQuery): Promise<ChatPersonAnswer> {
+        const { roomId, isLogged } = client.getUserData();
+        if (!isLogged || !chatPersonQuery.chatId) return { characterTextures: [] };
+        const person = await adminService.getChatPerson(chatPersonQuery.chatId, roomId);
+        return {
+            wokaName: person?.wokaName ?? undefined,
+            characterTextures: person?.characterTextures ?? [],
         };
     }
 

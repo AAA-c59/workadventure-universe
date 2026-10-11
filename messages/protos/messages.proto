@@ -489,6 +489,7 @@ message QueryMessage {
     FriendSettingsQuery friendSettingsQuery = 25;
     RingQuery ringQuery = 26;
     RingReplyQuery ringReplyQuery = 27;
+    ChatPersonQuery chatPersonQuery = 28;
   }
 }
 
@@ -721,6 +722,11 @@ message ChatMembersQuery {
   string searchText = 1;
 }
 
+// One person by chat ID (a direct chat with someone outside your world): their current name and Woka.
+message ChatPersonQuery {
+  string chatId = 1;
+}
+
 message OauthRefreshTokenQuery {
   string tokenToRefresh = 1;
   optional string provider = 2;
@@ -772,6 +778,7 @@ message AnswerMessage {
     FriendSettingsAnswer friendSettingsAnswer = 23;
     RingAnswer ringAnswer = 24;
     RingReplyAnswer ringReplyAnswer = 25;
+    ChatPersonAnswer chatPersonAnswer = 26;
   }
 }
 
@@ -903,6 +910,12 @@ message ChatMember {
   repeated string tags = 5;
   // The member's saved WOKA (bottom layer first), so the chat can draw people who are away.
   repeated CharacterTextureMessage characterTextures = 6;
+}
+
+message ChatPersonAnswer {
+  optional string wokaName = 1;
+  // Their Woka for your place (bottom layer first); empty when there is none to show.
+  repeated CharacterTextureMessage characterTextures = 2;
 }
 
 message SearchTagsAnswer{
