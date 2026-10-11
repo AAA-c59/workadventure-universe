@@ -178,6 +178,7 @@ export const FRONT_ENVIRONMENT_VARIABLES: FrontConfigurationInterface = {
     NODE_ENV: env.NODE_ENV || "development",
     CONTACT_URL: env.CONTACT_URL,
     POSTHOG_API_KEY: env.POSTHOG_API_KEY,
+    KLIPY_API_KEY: env.KLIPY_API_KEY || undefined,
     POSTHOG_URL: env.POSTHOG_URL,
     DISABLE_ANONYMOUS,
     ENABLE_OPENID: !!env.OPENID_CLIENT_ID || !!env.OPID_CLIENT_ID,

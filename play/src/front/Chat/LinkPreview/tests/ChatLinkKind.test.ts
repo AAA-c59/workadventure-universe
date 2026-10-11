@@ -41,3 +41,24 @@ describe("bodyShownWithCard", () => {
         expect(bodyShownWithCard("see https://example.com")).toBe("see https://example.com");
     });
 });
+
+describe("a GIF sent from the GIF picker", () => {
+    const gif = "https://static.klipy.com/ii/abc/def/md.gif";
+
+    it("is shown by its picture alone, without its address", () => {
+        expect(bodyShownWithCard(gif)).toBe("");
+        expect(bodyShownWithCard("https://media4.giphy.com/media/abc/giphy.gif")).toBe("");
+        expect(bodyShownWithCard("https://media.tenor.com/abc/tenor.gif")).toBe("");
+    });
+
+    it("keeps the text that comes before it", () => {
+        expect(bodyShownWithCard(`this one ${gif}`)).toBe("this one");
+    });
+
+    it("keeps the address of any other picture, and of a GIF site page that is not a picture", () => {
+        expect(bodyShownWithCard("https://example.com/cat.gif")).toBe("https://example.com/cat.gif");
+        expect(bodyShownWithCard("https://giphy.com/gifs/hello-abc")).toBe("https://giphy.com/gifs/hello-abc");
+        expect(bodyShownWithCard("http://static.klipy.com/a.gif")).toBe("http://static.klipy.com/a.gif");
+        expect(bodyShownWithCard("https://notklipy.com/a.gif")).toBe("https://notklipy.com/a.gif");
+    });
+});

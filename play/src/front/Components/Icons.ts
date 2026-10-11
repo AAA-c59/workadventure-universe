@@ -177,3 +177,5 @@ export { default as IconEyeglass } from "~icons/tabler/eyeglass";
 export { default as IconHeadphonesOutline } from "~icons/tabler/headphones";
 export { default as IconLayoutSidebarRight } from "~icons/tabler/layout-sidebar-right";
 export { default as IconPlayerPlayFilled } from "~icons/tabler/player-play-filled";
+export { default as IconGif } from "~icons/tabler/gif";
+export { default as IconTrendingUp } from "~icons/tabler/trending-up";
