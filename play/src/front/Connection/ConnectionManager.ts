@@ -42,6 +42,7 @@ import { ABSOLUTE_PUSHER_URL } from "../Enum/ComputedConst";
 import { openChatRoom } from "../Chat/Utils";
 import LL from "../../i18n/i18n-svelte";
 import { errorScreenStore } from "../Stores/ErrorScreenStore";
+import { gameTokenToJoinWith } from "../external-modules/admin-api/orbitAccessToken";
 import { axiosToPusher, axiosWithRetry } from "./AxiosUtils";
 import { Room } from "./Room";
 import { LocalUser } from "./LocalUser";
@@ -461,7 +462,21 @@ class ConnectionManager {
         this.localUser = new LocalUser("");
     }
 
-    public connectToRoomSocket(
+    /**
+     * Joining a room uses the game's token, whose OIDC access token runs out after about an hour: join with the newest
+     * token there is, renewed first when it has run out.
+     */
+    private async useNewestAuthToken(roomUrl: string, isCurrent: () => boolean): Promise<void> {
+        if (!this.authToken) return;
+        try {
+            this.authToken = await gameTokenToJoinWith(this.authToken, roomUrl, isCurrent);
+        } catch (error) {
+            // Browser storage can be unavailable: join with the token we have rather than not at all.
+            console.warn("[ConnectionManager] Could not pick the newest sign-in token before joining a room", error);
+        }
+    }
+
+    public async connectToRoomSocket(
         roomUrl: string,
         name: string,
         characterTextureIds: string[],
@@ -471,8 +486,11 @@ class ConnectionManager {
         availabilityStatus: AvailabilityStatus,
         lastCommandId?: string,
         options: ConnectOptions = {}
-    ): Promise<OnConnectInterface> {
-        return new Promise<OnConnectInterface>((resolve, reject) => {
+    ): Promise<OnConnectInterface | undefined> {
+        await this.useNewestAuthToken(roomUrl, () => !options.cancelled?.());
+        // The map that asked was closed while the token was renewed: don't open a socket for it.
+        if (options.cancelled?.()) return undefined;
+        return new Promise<OnConnectInterface | undefined>((resolve, reject) => {
             const connection = new RoomConnection(
                 this.authToken,
                 roomUrl,
@@ -664,7 +682,7 @@ class ConnectionManager {
                 this.failedSocketAttempts === 1
                     ? 1000 + Math.floor(Math.random() * 1000)
                     : 4000 + Math.floor(Math.random() * 2000);
-            return new Promise<OnConnectInterface>((resolve) => {
+            return new Promise<OnConnectInterface | undefined>((resolve) => {
                 console.info("connectToRoomSocket => catch => new Promise[OnConnectInterface] => reconnectingTimeout");
 
                 // This retry's own timer. The shared handle (cleared on page unload) may by now hold a newer map's
@@ -703,7 +721,8 @@ class ConnectionManager {
                         lastCommandId,
                         options
                     ).then((connection) => {
-                        if (!options.cancelled?.()) this._roomConnectionStream.next(connection.connection);
+                        if (connection && !options.cancelled?.())
+                            this._roomConnectionStream.next(connection.connection);
                         resolve(connection);
                     });
                 };
@@ -750,6 +769,12 @@ class ConnectionManager {
         const response = MeResponse.parse(data);
 
         if (response.status === "error") {
+            // A refusal the pusher sent after renewing the token carries it: keep it, the old one may no longer work.
+            const renewedToken = (data as { authToken?: unknown } | null)?.authToken;
+            if (typeof renewedToken === "string") {
+                localUserStore.setAuthToken(renewedToken);
+                this.authToken = renewedToken;
+            }
             return response;
         }
 
