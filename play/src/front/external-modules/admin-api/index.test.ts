@@ -49,6 +49,9 @@ const mocks = vi.hoisted(() => ({
     setAuthToken: vi.fn(),
     getAuthToken: vi.fn((): string | null => "game-token"),
     pusherGet: vi.fn(),
+    isBlackListed: vi.fn((): boolean => false),
+    ring: vi.fn((): Promise<boolean> => Promise.resolve(true)),
+    openDirectChatRoom: vi.fn((): Promise<void> => Promise.resolve()),
 }));
 
 /** The browser's history, small enough to see through: entries and the one being shown. */
@@ -82,8 +85,14 @@ vi.mock("../../Connection/LocalUserStore", () => ({
         setName: mocks.setLocalName,
         setAuthToken: mocks.setAuthToken,
         getAuthToken: mocks.getAuthToken,
+        getLocalUser: () => ({ uuid: "uuid-me" }),
+        getChatId: () => "@me:chat.example.com",
     },
 }));
+
+vi.mock("../../WebRtc/BlackListManager", () => ({ blackListManager: { isBlackListed: mocks.isBlackListed } }));
+vi.mock("../../Chat/Stores/RingStore", () => ({ ringStore: { ring: mocks.ring } }));
+vi.mock("../../Chat/Utils", () => ({ openDirectChatRoom: mocks.openDirectChatRoom }));
 
 vi.mock("../../Connection/Capabilities", () => ({
     hasCapability: (name: string) => name === "api/save-name",
@@ -420,7 +429,7 @@ describe("The Orbit bridge", () => {
                 type: "orbit-bridge-init",
                 version: 1,
                 roomRevision: revision,
-                capabilities: ["navigate", "event", "view", "profile"],
+                capabilities: ["navigate", "event", "view", "profile", "invite", "message"],
                 view: "compact",
                 maxNameLength: 25,
             },
@@ -513,6 +522,71 @@ describe("The Orbit bridge", () => {
         (await openAndRename("Someone", "rev-from-an-earlier-visit-0000"))();
         expect(mocks.setPlayerName).not.toHaveBeenCalled();
         expect(mocks.rejoinCurrentRoom).not.toHaveBeenCalled();
+    });
+
+    describe("asking the game to invite or message someone", () => {
+        async function openOrbit() {
+            const index = await freshIndex();
+            index.default.init({}, makeOptions());
+            vi.advanceTimersByTime(3000);
+            index.openAdminModalFromMenu();
+            fromOrbit({ type: "orbit-bridge-ready", version: 1, capabilities: [] });
+            mocks.modalVisibilitySet.mockClear();
+            return lastInitRevision();
+        }
+
+        const invite = (roomRevision: string, uuid = "uuid-ali") => ({
+            type: "orbit-invite-person",
+            version: 1,
+            roomRevision,
+            uuid,
+            name: "Ali",
+        });
+        const message = (roomRevision: string, chatId = "@ali:chat.example.com") => ({
+            type: "orbit-message-person",
+            version: 1,
+            roomRevision,
+            uuid: "uuid-ali",
+            name: "Ali",
+            chatId,
+        });
+
+        it("invites them and closes Orbit, as a tap on Invite in the People tab does", async () => {
+            const revision = await openOrbit();
+            fromOrbit(invite(revision));
+            expect(mocks.ring).toHaveBeenCalledWith("uuid-ali", "Ali");
+            expect(mocks.modalVisibilitySet).toHaveBeenCalledWith(false);
+        });
+
+        it("opens their chat and closes Orbit", async () => {
+            const revision = await openOrbit();
+            fromOrbit(message(revision));
+            expect(mocks.openDirectChatRoom).toHaveBeenCalledWith("@ali:chat.example.com");
+            expect(mocks.modalVisibilitySet).toHaveBeenCalledWith(false);
+        });
+
+        it("ignores a request from another window, origin or visit, and a malformed one", async () => {
+            const revision = await openOrbit();
+            fromOrbit(invite(revision), { postMessage: vi.fn() });
+            fromOrbit(invite(revision), frame, "https://evil.example.com");
+            fromOrbit(invite("rev-from-an-earlier-visit-0000"));
+            fromOrbit(message(revision, "not a matrix id"));
+            fromOrbit({ ...invite(revision), uuid: "" });
+            fromOrbit({ ...invite(revision), version: 2 });
+            expect(mocks.ring).not.toHaveBeenCalled();
+            expect(mocks.openDirectChatRoom).not.toHaveBeenCalled();
+            expect(mocks.modalVisibilitySet).not.toHaveBeenCalled();
+        });
+
+        it("never invites yourself or someone you blocked, and never opens a chat with yourself", async () => {
+            const revision = await openOrbit();
+            fromOrbit(invite(revision, "uuid-me"));
+            mocks.isBlackListed.mockReturnValueOnce(true);
+            fromOrbit(invite(revision));
+            fromOrbit(message(revision, "@me:chat.example.com"));
+            expect(mocks.ring).not.toHaveBeenCalled();
+            expect(mocks.openDirectChatRoom).not.toHaveBeenCalled();
+        });
     });
 
     it("gives focus back to the control that opened Orbit when Orbit closes", async () => {
