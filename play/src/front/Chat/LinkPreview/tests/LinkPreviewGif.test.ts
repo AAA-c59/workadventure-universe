@@ -97,6 +97,21 @@ describe("a picture in a chat message", () => {
         expect(get(lightboxOpenStore)).toBe(false);
     });
 
+    it("keeps the game's keys off while a GIF is open and another one arrives or leaves", async () => {
+        click(await show(GIF));
+        await tick();
+
+        const other = document.createElement("div");
+        document.body.appendChild(other);
+        const arriving = new LinkPreview({ target: other, props: { body: GIF, alone: true } });
+        await tick();
+        expect(get(lightboxOpenStore)).toBe(true);
+
+        arriving.$destroy();
+        other.remove();
+        expect(get(lightboxOpenStore)).toBe(true);
+    });
+
     it("keeps opening other picture links in a new tab", async () => {
         const card = await show("https://example.com/cat.png");
         const event = click(card);
