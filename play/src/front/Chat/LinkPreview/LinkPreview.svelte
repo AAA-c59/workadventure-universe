@@ -4,6 +4,7 @@
     import LL from "../../../i18n/i18n-svelte";
     import { coWebsites } from "../../Stores/CoWebsiteStore";
     import { SimpleCoWebsite } from "../../WebRtc/CoWebsite/SimpleCoWebsite";
+    import Lightbox from "../Components/Room/Message/Lightbox.svelte";
     import type { LinkKind } from "./LinkKind";
     import { APP_ICONS, youtubeSvg } from "./appIcons";
     import { classifyChatLink, previewedLinkOf } from "./ChatLinkKind";
@@ -28,6 +29,7 @@
     let web: WebPreview | undefined;
     let video: YoutubePreview = {};
     let imageFailed = false;
+    let pictureOpen = false;
     let loadedFor: string | undefined;
 
     $: firstLink = previewedLinkOf(body ?? "");
@@ -40,6 +42,7 @@
         web = undefined;
         video = {};
         imageFailed = false;
+        pictureOpen = false;
         if (!url) return;
 
         const kind = classifyChatLink(url);
@@ -87,6 +90,13 @@
         } catch (error) {
             console.error("Could not open a chat link beside the map", error);
         }
+    }
+
+    /** A picture opens in the picture viewer, as an uploaded picture does. The link in the message text stays a link. */
+    function openPicture(event: MouseEvent) {
+        if (link?.kind !== "image") return;
+        event.preventDefault();
+        pictureOpen = true;
     }
 
     $: playing = $playingChatVideoStore === previewId;
@@ -212,6 +222,7 @@
         href={link.url}
         target="_blank"
         rel="noopener noreferrer"
+        on:click={openPicture}
         data-testid="imageLinkPreview"
     >
         <img
@@ -224,6 +235,7 @@
             on:error={() => (imageFailed = true)}
         />
     </a>
+    <Lightbox src={link.url} alt="" show={pictureOpen} on:close={() => (pictureOpen = false)} />
 {:else if link?.kind === "image" && (alone || isGifSiteImage(link.url))}
     <!-- The picture didn't load and its address is not shown above (a lone image link, or a GIF): show it here so it is never lost. -->
     <a class="link-preview-fallback" href={link.url} target="_blank" rel="noopener noreferrer">{link.url}</a>
