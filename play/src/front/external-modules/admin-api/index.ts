@@ -13,6 +13,9 @@ import { hasCapability } from "../../Connection/Capabilities";
 import { isUserNameValid, maxUserNameLength } from "../../Connection/LocalUserUtils";
 import type { ModalEvent } from "../../Api/Events/ModalEvent";
 import { analyticsClient } from "../../Administration/AnalyticsClient";
+import { blackListManager } from "../../WebRtc/BlackListManager";
+import { ringStore } from "../../Chat/Stores/RingStore";
+import { openDirectChatRoom } from "../../Chat/Utils";
 import {
     ORBIT_AUTH_VERSION,
     buildAdminLoginUrl,
@@ -24,6 +27,8 @@ import {
     OrbitBridge,
     isOrbitBridgeAckMessage,
     isOrbitBridgeReadyMessage,
+    isOrbitInvitePersonMessage,
+    isOrbitMessagePersonMessage,
     isOrbitProfileChangedMessage,
     newRoomRevision,
     type OrbitEventTopic,
@@ -147,6 +152,16 @@ function handleAdminAuthMessage(event: MessageEvent<unknown>) {
             pendingPlayerName = name;
         return;
     }
+    if (isOrbitInvitePersonMessage(event.data)) {
+        // A request, like a tap on Invite in the People tab: the game checks reach, Busy and blocks itself.
+        if (bridge && event.data.roomRevision === bridge.roomRevision)
+            invitePersonFromOrbit(event.data.uuid, event.data.name.trim());
+        return;
+    }
+    if (isOrbitMessagePersonMessage(event.data)) {
+        if (bridge && event.data.roomRevision === bridge.roomRevision) messagePersonFromOrbit(event.data.chatId);
+        return;
+    }
     if (!isOrbitAuthReadyMessage(event.data)) return;
     const { nonce, refresh } = event.data;
     const source = event.source;
@@ -163,6 +178,21 @@ function handleAdminAuthMessage(event: MessageEvent<unknown>) {
         };
         source.postMessage(response, origin);
     });
+}
+
+/** Orbit asked to invite someone over: Orbit closes so the invite and its answer are seen, and the game invites them. */
+function invitePersonFromOrbit(uuid: string, name: string) {
+    // Not yourself, and not someone you blocked here (the People tab offers neither).
+    if (uuid === localUserStore.getLocalUser()?.uuid || blackListManager.isBlackListed(uuid)) return;
+    closeAdminModal();
+    ringStore.ring(uuid, name).catch((error) => console.error("Could not invite from Orbit", error));
+}
+
+/** Orbit asked to message someone: Orbit closes and the game opens their chat. */
+function messagePersonFromOrbit(chatId: string) {
+    if (chatId === localUserStore.getChatId()) return;
+    closeAdminModal();
+    openDirectChatRoom(chatId).catch((error) => console.error("Could not open the chat from Orbit", error));
 }
 
 /**
