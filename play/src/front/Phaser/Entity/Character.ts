@@ -6,7 +6,7 @@ import { Deferred } from "ts-deferred";
 import type { AvailabilityStatus as AvailabilityStatusType } from "@workadventure/messages";
 import { SayMessageType, AvailabilityStatus, PositionMessage_Direction } from "@workadventure/messages";
 import { defaultWoka } from "@workadventure/shared-utils";
-import { currentPlayerWokaStore } from "../../Stores/CurrentPlayerWokaStore";
+import { currentPlayerWokaLayersStore, currentPlayerWokaStore } from "../../Stores/CurrentPlayerWokaStore";
 import { PlayerStatusDot } from "../Components/PlayerStatusDot";
 import { TalkIcon } from "../Components/TalkIcon";
 import type { OutlineableInterface } from "../Game/OutlineableInterface";
@@ -121,6 +121,8 @@ export abstract class Character extends Container implements OutlineableInterfac
         if (userId != undefined) {
             this.waitAndGetSnapshot()
                 .then((htmlImageElementSrc) => {
+                    // The layers in the snapshot: the chosen woka's, or the fallback's when those failed to load.
+                    currentPlayerWokaLayersStore.set(Array.from(this.sprites.keys()));
                     currentPlayerWokaStore.set(htmlImageElementSrc);
                 })
                 .catch((e) => {

@@ -52,6 +52,7 @@ import { matrixSecurity } from "./MatrixSecurity";
 import { MatrixChatRoomMember } from "./MatrixChatRoomMember";
 import { isInvitationGoneError } from "./isInvitationGoneError";
 import { changingMatrixAvatarStore } from "./MatrixMedia";
+import { lastMessageTimestamp } from "./lastMessageTimestamp";
 
 /** How long leaving waits for pending invitations to be withdrawn before it leaves anyway. */
 const INVITE_WITHDRAWAL_DEADLINE_MS = 3000;
@@ -824,8 +825,14 @@ export class MatrixChatRoom
         return this.matrixRoom.client.sendTyping(this.id, false, isTypingTime);
     }
 
+    /** The last message's time, not the last event's: a new name or picture of a member doesn't move the chat. */
     public get lastMessageTimestamp(): number {
-        return this.matrixRoom.getLastActiveTimestamp();
+        const newestLoadedMessage = this.messages[this.messages.length - 1];
+        return lastMessageTimestamp(
+            this.matrixRoom.getLiveTimeline().getEvents(),
+            newestLoadedMessage?.date?.getTime(),
+            this.matrixRoom.currentState.getStateEvents("m.room.create", "")?.getTs()
+        );
     }
 
     /** This account's pending invite event in this room, if there is one. */
