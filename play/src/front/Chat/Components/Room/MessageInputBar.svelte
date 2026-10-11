@@ -616,6 +616,8 @@
             messageBarRef,
             GifPicker,
             {
+                // The picker is as wide as the chat panel the message bar sits on.
+                anchor: messageBarRef,
                 onPick: (url: string) => {
                     hideGifPicker();
                     sendGif(url);
@@ -626,7 +628,8 @@
                     hideGifPicker();
                 },
             },
-            { placement: "top-end" },
+            // Centred on the bar: as wide as the panel less 8px each side, so it has 8px on both.
+            { placement: "top" },
             8,
             false
         );
