@@ -12,7 +12,8 @@ vi.mock("../../../../../Phaser/Game/GameManager", () => ({ gameManager: {} }));
 vi.mock("../../../../../Administration/AnalyticsClient", () => ({ analyticsClient: {} }));
 vi.mock("../../../../../WebRtc/BlackListManager", () => ({ blackListManager: {} }));
 vi.mock("../../../../../Stores/ShowReportScreenStore", () => ({ showReportScreenStore: {} }));
-vi.mock("../../../../Stores/RingStore", () => ({ ringStore: { ring: vi.fn(() => Promise.resolve(true)) } }));
+const ring = vi.hoisted(() => ({ ring: vi.fn(() => Promise.resolve(true)) }));
+vi.mock("../../../../Stores/RingStore", () => ({ ringStore: ring }));
 const friendMenu = vi.hoisted(() => ({ friendMenuAction: vi.fn(() => ({ label: "Add friend" })) }));
 vi.mock("../../../UserList/FriendMenuAction", () => friendMenu);
 vi.mock("../../../UserList/PersonNavigation", () => ({
@@ -21,7 +22,6 @@ vi.mock("../../../UserList/PersonNavigation", () => ({
     walkToPerson: vi.fn(),
 }));
 
-import { ringStore } from "../../../../Stores/RingStore";
 import type { TranslationFunctions } from "../../../../../../i18n/i18n-types";
 import {
     canInvitePartner,
@@ -110,10 +110,10 @@ describe("a direct chat's Invite, Add friend and Report", () => {
 
     it("rings them by account id", () => {
         invitePartner(partner({ uuid: "uuid-ada" }), "Ada");
-        expect(ringStore.ring).toHaveBeenCalledWith("uuid-ada", "Ada");
-        (ringStore.ring as ReturnType<typeof vi.fn>).mockClear();
+        expect(ring.ring).toHaveBeenCalledWith("uuid-ada", "Ada");
+        ring.ring.mockClear();
         invitePartner(partner(), "Ada");
-        expect(ringStore.ring).not.toHaveBeenCalled();
+        expect(ring.ring).not.toHaveBeenCalled();
     });
 
     it("offers Add friend from how you stand with them, and nothing without friends, an account or a chat id", () => {
