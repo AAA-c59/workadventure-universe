@@ -7,6 +7,8 @@ export interface TimelineEventLike {
 
 /** Event types that are a message someone sent. Encrypted ones count before they are decrypted. */
 const MESSAGE_EVENT_TYPES = new Set(["m.room.message", "m.room.encrypted", "m.sticker"]);
+/** Edits and reactions, which stay readable on an encrypted event before it is decrypted. */
+const NOT_A_NEW_MESSAGE = new Set(["m.replace", "m.annotation"]);
 
 /**
  * When the last message in a room was sent, for the chat list's time and order.
@@ -23,7 +25,8 @@ export function lastMessageTimestamp(
     for (let index = timelineEvents.length - 1; index >= 0; index--) {
         const event = timelineEvents[index];
         if (!MESSAGE_EVENT_TYPES.has(event.getType())) continue;
-        if (event.getRelation()?.rel_type === "m.replace") continue;
+        const relType = event.getRelation()?.rel_type;
+        if (relType !== undefined && NOT_A_NEW_MESSAGE.has(relType)) continue;
         const ts = event.getTs();
         if (Number.isFinite(ts) && ts > 0) {
             newest = ts;

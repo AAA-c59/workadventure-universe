@@ -30,6 +30,15 @@ describe("lastMessageTimestamp", () => {
         expect(lastMessageTimestamp(events, undefined, undefined)).toBe(DEC_2025);
     });
 
+    it("ignores an encrypted reaction or edit before it is decrypted", () => {
+        const events = [
+            event("m.room.message", DEC_2025),
+            event("m.room.encrypted", OCT_2026, "m.annotation"),
+            event("m.room.encrypted", OCT_2026, "m.replace"),
+        ];
+        expect(lastMessageTimestamp(events, undefined, undefined)).toBe(DEC_2025);
+    });
+
     it("counts encrypted messages and stickers", () => {
         expect(lastMessageTimestamp([event("m.room.encrypted", OCT_2026)], undefined, undefined)).toBe(OCT_2026);
         expect(lastMessageTimestamp([event("m.sticker", OCT_2026)], undefined, undefined)).toBe(OCT_2026);
