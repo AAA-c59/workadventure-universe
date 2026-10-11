@@ -8,6 +8,8 @@
     /** Extra classes on the row: "u-danger" for a destructive choice, or a fill of its own. */
     export let bg = "";
     export let disabled = false;
+    /** "menuitem" when the rows sit in a role="menu" list. */
+    export let role: string | undefined = undefined;
     const dispatch = createEventDispatcher<{
         click: void;
     }>();
@@ -17,6 +19,7 @@
      browser's own button font or iOS blue. -->
 <button
     type="button"
+    {role}
     class="u-menu-row {bg}"
     data-testid={dataTestId}
     on:click|stopPropagation|preventDefault={() => dispatch("click")}
