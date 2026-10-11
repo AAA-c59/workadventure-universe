@@ -228,6 +228,12 @@ describe("GET /me for a member whose access token ran out (Orbit #306)", () => {
         expect(res.body).toEqual({ ...membersOnly, authToken: "renewed-game-token" });
     });
 
+    it("doesn't check the access token that ran out again once Orbit knows the owner with the renewed one", async () => {
+        await callMe({ token: "game-token", playUri });
+        expect(checkTokenAuth.mock.calls.map((call) => call[0])).toEqual(["expired-access", "new-access"]);
+        expect(refreshAccessToken).toHaveBeenCalledTimes(1);
+    });
+
     it("asks Orbit again with the renewed access token", async () => {
         await callMe({ token: "game-token", playUri });
         expect(fetchMemberDataByUuid.mock.calls.map((call) => call[1])).toEqual(["expired-access", "new-access"]);

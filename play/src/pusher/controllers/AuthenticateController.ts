@@ -262,6 +262,9 @@ export class AuthenticateController extends BaseHttpController {
                 const renewTokens = () => (renewalInFlight ??= doRenewTokens());
 
                 let resUserData: Exclude<typeof firstUserData, { status: "error" }>;
+                // Orbit knew the player once asked with the renewed token: answer with that token, no need to check
+                // the old one that ran out.
+                let answeredWithRenewedToken = false;
                 if (firstUserData.status !== "error") {
                     resUserData = firstUserData;
                 } else {
@@ -285,6 +288,7 @@ export class AuthenticateController extends BaseHttpController {
                         return;
                     }
                     resUserData = askedAgain;
+                    answeredWithRenewedToken = true;
                 }
 
                 if (authTokenData.accessToken == undefined) {
@@ -320,7 +324,7 @@ export class AuthenticateController extends BaseHttpController {
 
                 // The caller says this access token was refused: renew it even if the provider still accepts it.
                 // If that fails, fall through to the usual check, which keeps a token that is still good.
-                if (refresh === "true" && (await respondWithRefreshedToken())) return;
+                if ((refresh === "true" || answeredWithRenewedToken) && (await respondWithRefreshedToken())) return;
 
                 try {
                     const resCheckTokenAuth = await openIDClient.checkTokenAuth(authTokenData.accessToken);
