@@ -101,6 +101,60 @@ describe("ChatPeople", () => {
     });
 });
 
+describe("ChatPeople retries", () => {
+    it("asks again on its own a minute after a failure, while the chat stays open", async () => {
+        let time = 1_000;
+        const retries: (() => void)[] = [];
+        const ask = vi
+            .fn<(chatId: string) => Promise<ChatPersonAnswer>>()
+            .mockRejectedValueOnce(new Error("network"))
+            .mockResolvedValue({ wokaName: "Alice", characterTextures: [] });
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+        const people = new ChatPeople(
+            ask,
+            () => time,
+            (retry, delayMs) => {
+                expect(delayMs).toBe(60_000);
+                retries.push(retry);
+            }
+        );
+
+        people.request("@alice:m");
+        await vi.waitFor(() => expect(retries).toHaveLength(1));
+        time += 60_000;
+        retries[0]();
+        await vi.waitFor(() => expect(get(people.store).get("@alice:m")?.name).toBe("Alice"));
+        expect(ask).toHaveBeenCalledTimes(2);
+        warn.mockRestore();
+    });
+
+    it("stops retrying on its own after three failures in a row", async () => {
+        let time = 1_000;
+        const retries: (() => void)[] = [];
+        const ask = vi.fn<(chatId: string) => Promise<ChatPersonAnswer>>().mockRejectedValue(new Error("down"));
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+        const people = new ChatPeople(
+            ask,
+            () => time,
+            (retry) => retries.push(retry)
+        );
+
+        people.request("@alice:m");
+        const retryAfterFailure = async (attempt: number) => {
+            await vi.waitFor(() => expect(retries).toHaveLength(attempt));
+            time += 60_000;
+            retries[attempt - 1]();
+        };
+        await retryAfterFailure(1);
+        await retryAfterFailure(2);
+        await retryAfterFailure(3);
+        await vi.waitFor(() => expect(ask).toHaveBeenCalledTimes(4));
+        await vi.waitFor(() => expect(warn).toHaveBeenCalledTimes(4));
+        expect(retries).toHaveLength(3);
+        warn.mockRestore();
+    });
+});
+
 describe("chatPeopleOf", () => {
     it("is one set of people per connection, and none without a connection", () => {
         const connection = { queryChatPerson: vi.fn() };

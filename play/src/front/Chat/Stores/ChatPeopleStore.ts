@@ -17,10 +17,16 @@ export type AskChatPerson = (chatId: string) => Promise<ChatPersonAnswer>;
 
 /** At most this many questions are out at once, so a long chat list never floods the server. */
 const MAX_IN_FLIGHT = 3;
-/** A question that failed (network, server) is asked again no sooner than this. */
+/** A question that failed (network, server) is asked again no sooner than this, on its own while the chat stays open. */
 const RETRY_AFTER_MS = 60_000;
+/** A question that keeps failing is asked again on its own at most this many times (a later request still asks). */
+const MAX_AUTO_RETRIES = 3;
 
-type Asked = { status: "pending" } | { status: "done" } | { status: "failed"; at: number };
+type Asked =
+    | { status: "pending"; failures: number }
+    | { status: "done" }
+    | { status: "failed"; at: number; failures: number };
+type Schedule = (retry: () => void, delayMs: number) => void;
 
 /**
  * People the chat only knows from a direct chat (they are not in your world, so neither the map nor the world's member
@@ -36,13 +42,19 @@ export class ChatPeople {
     /** Everyone asked about so far, by chat ID. */
     readonly store: Readable<Map<string, ChatPerson>> = { subscribe: this.people.subscribe };
 
-    constructor(private readonly ask: AskChatPerson, private readonly now: () => number = () => Date.now()) {}
+    constructor(
+        private readonly ask: AskChatPerson,
+        private readonly now: () => number = () => Date.now(),
+        private readonly schedule: Schedule = (retry, delayMs) => {
+            setTimeout(retry, delayMs);
+        }
+    ) {}
 
     /** Asks about this person unless they were asked about already (or the question is still out). */
     request(chatId: string): void {
         const asked = this.asked.get(chatId);
         if (asked && (asked.status !== "failed" || this.now() - asked.at < RETRY_AFTER_MS)) return;
-        this.asked.set(chatId, { status: "pending" });
+        this.asked.set(chatId, { status: "pending", failures: asked?.status === "failed" ? asked.failures : 0 });
         this.queue.push(chatId);
         this.pump();
     }
@@ -61,8 +73,12 @@ export class ChatPeople {
                     this.people.update((people) => new Map(people).set(chatId, { name: name || undefined, picture }));
                 })
                 .catch((error) => {
-                    this.asked.set(chatId, { status: "failed", at: this.now() });
+                    const previous = this.asked.get(chatId);
+                    const failures = (previous?.status === "pending" ? previous.failures : 0) + 1;
+                    this.asked.set(chatId, { status: "failed", at: this.now(), failures });
                     console.warn("Could not ask for a person by chat ID", error);
+                    // The chat shows the same person until something changes, so nothing would ask again: retry here.
+                    if (failures <= MAX_AUTO_RETRIES) this.schedule(() => this.request(chatId), RETRY_AFTER_MS);
                 })
                 .finally(() => {
                     this.inFlight--;
