@@ -54,7 +54,17 @@ export class ChatPeople {
     request(chatId: string): void {
         const asked = this.asked.get(chatId);
         if (asked && (asked.status !== "failed" || this.now() - asked.at < RETRY_AFTER_MS)) return;
-        this.asked.set(chatId, { status: "pending", failures: asked?.status === "failed" ? asked.failures : 0 });
+        this.enqueue(chatId, asked?.status === "failed" ? asked.failures : 0);
+    }
+
+    /** The scheduled retry after a failure: asks again unless someone already did (no clock check, timers can run early). */
+    private retry(chatId: string): void {
+        const asked = this.asked.get(chatId);
+        if (asked?.status === "failed") this.enqueue(chatId, asked.failures);
+    }
+
+    private enqueue(chatId: string, failures: number): void {
+        this.asked.set(chatId, { status: "pending", failures });
         this.queue.push(chatId);
         this.pump();
     }
@@ -78,7 +88,7 @@ export class ChatPeople {
                     this.asked.set(chatId, { status: "failed", at: this.now(), failures });
                     console.warn("Could not ask for a person by chat ID", error);
                     // The chat shows the same person until something changes, so nothing would ask again: retry here.
-                    if (failures <= MAX_AUTO_RETRIES) this.schedule(() => this.request(chatId), RETRY_AFTER_MS);
+                    if (failures <= MAX_AUTO_RETRIES) this.schedule(() => this.retry(chatId), RETRY_AFTER_MS);
                 })
                 .finally(() => {
                     this.inFlight--;

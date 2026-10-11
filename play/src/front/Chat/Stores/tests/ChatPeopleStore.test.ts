@@ -121,7 +121,8 @@ describe("ChatPeople retries", () => {
 
         people.request("@alice:m");
         await vi.waitFor(() => expect(retries).toHaveLength(1));
-        time += 60_000;
+        // A timer may run a little early by the wall clock: the retry still asks
+        time += 59_990;
         retries[0]();
         await vi.waitFor(() => expect(get(people.store).get("@alice:m")?.name).toBe("Alice"));
         expect(ask).toHaveBeenCalledTimes(2);
