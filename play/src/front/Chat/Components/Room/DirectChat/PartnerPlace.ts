@@ -93,3 +93,19 @@ export function findInUniverse(
     }
     return found;
 }
+
+/**
+ * A person's account id from the chat id of their direct chat, for someone who isn't in this world: the member list
+ * (Orbit sends each member's account id) or your friends. Someone in Universe right now already carries theirs.
+ */
+export function findAccountUuid(
+    map: ReadonlyMap<string | undefined, { users: readonly ChatUser[] }>,
+    friends: readonly { uuid: string; chatId: string }[],
+    chatId: string
+): string | undefined {
+    for (const { users } of map.values()) {
+        const uuid = users.find((candidate) => candidate.chatId === chatId && candidate.uuid)?.uuid;
+        if (uuid) return uuid;
+    }
+    return friends.find((friend) => friend.chatId === chatId && friend.uuid)?.uuid;
+}

@@ -15,11 +15,16 @@
     import { openChatMenuStore } from "../../../Stores/OpenChatMenuStore";
     import { selectedRoomStore } from "../../../Stores/SelectRoomStore";
     import { openProfileRoomIdStore } from "../../../Stores/PartnerProfileStore";
+    import { friendsEnabledStore, relationshipsStore } from "../../../Stores/FriendsStore";
+    import { invitesEnabledStore } from "../../../Stores/RingStore";
     import { directPartnerStore } from "../DirectChat/DirectPartnerStore";
     import {
+        canInvitePartner,
         canOpenPartnerProfile,
+        invitePartner,
         locatePartner,
         openPartnerProfile,
+        partnerFriendAction,
         walkToPartner,
     } from "../DirectChat/PartnerActions";
     import RoomOption from "./RoomOption.svelte";
@@ -33,6 +38,7 @@
         IconWalk,
         IconTrash,
         IconUserCircle,
+        IconUsersPlus,
     } from "@wa-icons";
 
     export let room: ChatRoom & ChatRoomMembershipManagement & ChatRoomNotificationControl & ChatRoomModeration;
@@ -51,6 +57,12 @@
     // A direct chat offers what works with that person right now: Walk to and Locate only when they can work.
     const isDirect = room.type === "direct";
     const partner = isDirect ? directPartnerStore(room) : undefined;
+
+    // Invite and Add friend need the person's account, which the chat finds even when they're in another world.
+    $: canInvite = $partner ? canInvitePartner($partner, $invitesEnabledStore) : false;
+    $: friendAction = $partner
+        ? partnerFriendAction($partner, $roomName, $friendsEnabledStore, $relationshipsStore, $LL)
+        : undefined;
 
     // Inside the one chat list, the list holds its order still while this menu is open.
     const orderFreeze = getContext<OrderFreeze | undefined>(ONE_LIST_FREEZE_CONTEXT);
@@ -125,6 +137,16 @@
         });
     }
 
+    function invite() {
+        if ($partner) invitePartner($partner, $roomName);
+        toggleRoomOptions();
+    }
+
+    function runFriendAction() {
+        friendAction?.act();
+        toggleRoomOptions();
+    }
+
     function walkTo() {
         if ($partner) walkToPartner($partner);
         toggleRoomOptions();
@@ -165,6 +187,14 @@
     data-testid="roomMenu"
 >
     {#if isDirect}
+        {#if canInvite}
+            <RoomOption
+                dataTestId="inviteOption"
+                IconComponent={IconUsersPlus}
+                title={$LL.chat.friends.ring.ring()}
+                on:click={invite}
+            />
+        {/if}
         {#if $partner?.actions.walkTo}
             <RoomOption IconComponent={IconWalk} title={$LL.chat.userList.walkTo()} on:click={walkTo} />
         {/if}
@@ -177,6 +207,14 @@
             title={$LL.chat.userList.viewProfile()}
             on:click={viewProfile}
         />
+        {#if friendAction && !friendAction.danger}
+            <RoomOption
+                dataTestId="friendActionOption"
+                IconComponent={friendAction.icon}
+                title={friendAction.label}
+                on:click={runFriendAction}
+            />
+        {/if}
     {/if}
     {#if shouldDisplayManageParticipantButton}
         <RoomOption
@@ -201,6 +239,15 @@
 
     {#if isDirect}
         <div class="u-menu-divider" />
+        {#if friendAction?.danger}
+            <RoomOption
+                dataTestId="friendActionOption"
+                IconComponent={friendAction.icon}
+                title={friendAction.label}
+                bg="u-danger"
+                on:click={runFriendAction}
+            />
+        {/if}
         {#if confirmingDelete}
             <div class="flex flex-col gap-2 p-2 text-sm" data-testid="deleteChatConfirm">
                 <span class="font-bold">{$LL.chat.directChat.deleteChat.confirm()}</span>

@@ -22,6 +22,7 @@ const chat: BaseTranslation = {
     chat: "Chat",
     userList: {
         disconnected: "Offline",
+        onlineElsewhere: "Online, not in this world",
         isHere: "On this map",
         inAnotherMap: "In another map",
         in: "In ",
@@ -728,6 +729,7 @@ const chat: BaseTranslation = {
         unblock: "Unblock",
         unblockUser: "Unblock {userName}",
         addFriend: "Add friend",
+        addFriendHint: "{name:string} gets a friend request.",
         addUserAsFriend: "Add {userName} as a friend",
         requestSent: "Request sent",
         cancelRequest: "Cancel friend request",

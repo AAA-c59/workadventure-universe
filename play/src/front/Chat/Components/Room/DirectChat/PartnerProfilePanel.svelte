@@ -20,16 +20,21 @@
     import { requestChatPerson } from "../../../Stores/ChatPeopleLookup";
     import type { PersonColourOf } from "../../../Stores/ChatUserWokaStore";
     import { selectedRoomStore } from "../../../Stores/SelectRoomStore";
+    import { friendsEnabledStore, relationshipsStore } from "../../../Stores/FriendsStore";
+    import { invitesEnabledStore } from "../../../Stores/RingStore";
     import TopRowAvatar from "../../TopRow/TopRowAvatar.svelte";
     import VisitCard from "../../../../Components/VisitCard/VisitCard.svelte";
     import type { DirectPartner } from "./DirectPartnerStore";
     import { isInUniverse } from "./PartnerPlace";
     import { partnerStatus } from "./PartnerStatus";
     import {
+        canInvitePartner,
         canOpenPartnerProfile,
         canReportPartner,
+        invitePartner,
         locatePartner,
         openPartnerProfile,
+        partnerFriendAction,
         reportPartner,
         setPartnerBlocked,
         walkToPartner,
@@ -43,6 +48,7 @@
         IconMute,
         IconTrash,
         IconUserCircle,
+        IconUsersPlus,
         IconWalk,
     } from "@wa-icons";
 
@@ -78,7 +84,11 @@
     $: status = partnerStatus(partner.place, $LL);
     $: live = isInUniverse(partner.place);
     $: canViewProfile = canOpenPartnerProfile(partner);
-    $: tiles = [partner.actions.walkTo, partner.actions.locate, canViewProfile].filter(Boolean).length;
+    $: canInvite = canInvitePartner(partner, $invitesEnabledStore);
+    $: tiles = [canInvite, partner.actions.walkTo, partner.actions.locate, canViewProfile].filter(Boolean).length;
+    // Add friend, or what comes next with them. Remove friend is red, so it sits with the other red rows.
+    $: friendAction = partnerFriendAction(partner, $roomName, $friendsEnabledStore, $relationshipsStore, $LL);
+    $: friendRequestPossible = partner.uuid !== undefined && !$relationshipsStore.has(partner.uuid);
 
     function toggleMute() {
         const change = $areNotificationsMuted ? room.unmuteNotification() : room.muteNotification();
@@ -163,6 +173,17 @@
 
         {#if tiles > 0}
             <div class="grid gap-2" style:grid-template-columns="repeat({tiles}, minmax(0, 1fr))">
+                {#if canInvite}
+                    <button
+                        type="button"
+                        class="partner-tile"
+                        data-testid="partnerInvite"
+                        on:click={() => invitePartner(partner, $roomName)}
+                    >
+                        <span class="partner-tile-icon"><IconUsersPlus font-size="20" /></span>
+                        {$LL.chat.friends.ring.ring()}
+                    </button>
+                {/if}
                 {#if partner.actions.walkTo}
                     <button type="button" class="partner-tile" on:click={() => walkToPartner(partner)}>
                         <span class="partner-tile-icon"><IconWalk font-size="20" /></span>
@@ -189,6 +210,25 @@
             </div>
         {/if}
 
+        {#if friendAction && !friendAction.danger}
+            <div class="partner-group">
+                <button
+                    type="button"
+                    class="u-menu-row !m-0"
+                    data-testid="partnerFriendAction"
+                    on:click={friendAction.act}
+                >
+                    <span class="u-menu-tile"><svelte:component this={friendAction.icon} /></span>
+                    <span class="flex min-w-0 flex-1 flex-col">
+                        <span class="truncate">{friendAction.label}</span>
+                        {#if friendRequestPossible}
+                            <span class="partner-hint">{$LL.chat.friends.addFriendHint({ name: $roomName })}</span>
+                        {/if}
+                    </span>
+                </button>
+            </div>
+        {/if}
+
         <div class="partner-group">
             <button
                 type="button"
@@ -205,6 +245,17 @@
         </div>
 
         <div class="partner-group">
+            {#if friendAction?.danger}
+                <button
+                    type="button"
+                    class="u-menu-row u-danger !m-0"
+                    data-testid="partnerFriendAction"
+                    on:click={friendAction.act}
+                >
+                    <span class="u-menu-tile"><svelte:component this={friendAction.icon} /></span>
+                    <span class="truncate">{friendAction.label}</span>
+                </button>
+            {/if}
             {#if !partner.isBot && partner.chatId}
                 <button
                     type="button"
