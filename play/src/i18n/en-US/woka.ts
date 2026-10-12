@@ -14,7 +14,7 @@ const woka: BaseTranslation = {
         presetsShort: "Ready-made",
         part: "Part {current:number} of {total:number}",
         nextPart: "next part",
-        swipeHint: "swipe the tiles for the next part",
+        swipeHint: "swipe for the next part",
         parts: {
             body: "Body",
             eyes: "Eyes",
@@ -47,7 +47,7 @@ const woka: BaseTranslation = {
         recent: "Recent",
         recentLabel: "Worn lately, allowed here",
         now: "Now",
-        swipeHint: "swipe the tiles for the next collection",
+        swipeHint: "swipe for the next collection",
     },
     refused: {
         wokaTitle: "Your WOKA can't be worn here",
