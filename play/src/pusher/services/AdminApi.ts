@@ -86,6 +86,10 @@ export const isFetchMemberDataByUuidSuccessResponse = z.object({
         description:
             "This data represents the textures (WOKA) that will be available to users. If an empty array is returned, the user is redirected to the Woka selection page.",
     }),
+    characterTextureIds: extendApi(z.array(z.string()).optional(), {
+        description:
+            "The ids of the Woka the player's account wears, even when this world cannot show it. The game keeps them on the device. Omitted by admins that do not know.",
+    }),
     isCompanionTextureValid: extendApi(z.boolean(), {
         description:
             "True if the companion texture is valid, false if we need to redirect the user to the companion selection page.",
