@@ -201,6 +201,8 @@ test.describe("Join: WOKA picker", () => {
         await expect(tabs.nth(0)).toHaveAttribute("aria-selected", "true");
         await swipe(activeTiles(page), -40);
         await expect(tabs.nth(0)).toHaveAttribute("aria-selected", "true");
+        // The short swipe still slides the page back for a moment; a new swipe is ignored until that is over
+        await expect(page.locator(".woka-pages")).not.toHaveClass(/woka-pages-sliding/);
         // Not only on the tiles: a swipe on the hint under them (the empty space) counts too
         await swipe(page.locator(".woka-swipe-hint"), -120);
         await expect(tabs.nth(1)).toHaveAttribute("aria-selected", "true");
