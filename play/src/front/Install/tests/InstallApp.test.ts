@@ -288,6 +288,18 @@ describe("InstallApp", () => {
             expect(get(app.cardVisibleStore)).toBe(false);
         });
 
+        it("does not bring the card back after a cancel from the menu when the card was waiting", async () => {
+            const { app, win, quiet } = setup({ env: env(CHROME) });
+            win.fire("beforeinstallprompt", installEvent("dismissed").event);
+            app.noteConversationEnded();
+            expect(get(app.cardVisibleStore)).toBe(true);
+            // the player opens the menu instead of using the card
+            quiet.set(false);
+            await app.install("menu");
+            quiet.set(true);
+            expect(get(app.cardVisibleStore)).toBe(false);
+        });
+
         it("uses the browser's window again when it offers a new one after a cancel", async () => {
             const { app, win } = setup({ env: env(CHROME) });
             win.fire("beforeinstallprompt", installEvent("dismissed").event);

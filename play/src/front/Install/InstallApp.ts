@@ -177,7 +177,8 @@ export class InstallApp {
 
     /** Install, from the card or the menu: the browser's own window where there is one, else the guide. */
     public async install(source: Extract<InstallSource, "card" | "menu">): Promise<void> {
-        if (source === "card") this.cardShownStore.set(false);
+        // The player is deciding now, from the card or the menu: the card has done its job either way.
+        this.cardShownStore.set(false);
         const prompt = get(this.promptStore);
         if (prompt !== undefined) {
             // The event opens the window once; the browser sends a new one if it offers again.
