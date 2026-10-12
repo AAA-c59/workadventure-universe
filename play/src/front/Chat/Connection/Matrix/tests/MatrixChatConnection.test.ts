@@ -5,9 +5,11 @@ import { KnownMembership } from "matrix-js-sdk/lib/types";
 import type { Readable } from "svelte/store";
 import { get, readable, writable } from "svelte/store";
 import type { AvailabilityStatus } from "@workadventure/messages";
+import { MapStore } from "@workadventure/store-utils";
 import { MatrixChatConnection } from "../MatrixChatConnection";
 import type { CreateRoomOptions } from "../../ChatConnection";
 import type { MatrixChatRoom } from "../MatrixChatRoom";
+import type { MatrixRoomFolder } from "../MatrixRoomFolder";
 import type { MatrixSecurity } from "../MatrixSecurity";
 import type { RequestedStatus } from "../../../../Rules/StatusRules/statusRules";
 
@@ -1009,6 +1011,88 @@ describe("MatrixChatConnection", () => {
             expect(created).toHaveBeenCalledExactlyOnceWith(matrixRoom);
             expect(current.destroy).not.toHaveBeenCalled();
             expect(connection["roomList"].has("other")).toBe(true);
+        });
+
+        describe("inside a folder (#853)", () => {
+            /** A folder holding the given chats, and optionally other folders, as the connection sees it. */
+            function folderWith(
+                rooms: Record<string, Partial<MatrixChatRoom>>,
+                subFolders: Record<string, MatrixRoomFolder> = {}
+            ) {
+                const roomList = new MapStore<string, MatrixChatRoom>();
+                Object.entries(rooms).forEach(([id, room]) =>
+                    roomList.set(id, { id, ...room } as unknown as MatrixChatRoom)
+                );
+                const folderList = new MapStore<string, MatrixRoomFolder>();
+                Object.entries(subFolders).forEach(([id, folder]) => folderList.set(id, folder));
+                return { roomList, folderList } as unknown as MatrixRoomFolder;
+            }
+
+            async function connectionWithFolders(folders: Record<string, MatrixRoomFolder>) {
+                const connection = await getMatrixConnection(
+                    Promise.resolve({
+                        getRoom: vi.fn((id: string) => ({ roomId: id })),
+                    } as unknown as MatrixClient)
+                );
+                Object.entries(folders).forEach(([id, folder]) => connection["roomFolders"].set(id, folder));
+                const made = vi
+                    .spyOn(
+                        connection as unknown as { createChatRoom: (room: { roomId: string }) => unknown },
+                        "createChatRoom"
+                    )
+                    .mockImplementation((room) => ({ id: room.roomId, made: true }));
+                const createdAtRoot = vi
+                    .spyOn(
+                        connection as unknown as { createAndAddNewRootRoom: (room: unknown) => unknown },
+                        "createAndAddNewRootRoom"
+                    )
+                    .mockImplementation(() => undefined);
+                return { connection, made, createdAtRoot };
+            }
+
+            it("makes a chat in a folder again in the same folder, not at the top level", async () => {
+                const stale = { hasOutdatedType: () => true, destroy: vi.fn() };
+                const current = { hasOutdatedType: () => false, destroy: vi.fn() };
+                const folder = folderWith({ [roomId]: stale, other: current });
+                const { connection, made, createdAtRoot } = await connectionWithFolders({ folder });
+                const untouched = folder.roomList.get("other");
+
+                connection["onAccountDataEvent"](event(EventType.Direct));
+
+                expect(stale.destroy).toHaveBeenCalledOnce();
+                expect(made).toHaveBeenCalledExactlyOnceWith({ roomId });
+                expect(folder.roomList.get(roomId)).toEqual({ id: roomId, made: true });
+                expect(folder.roomList.get("other")).toBe(untouched);
+                expect(current.destroy).not.toHaveBeenCalled();
+                expect(createdAtRoot).not.toHaveBeenCalled();
+                expect(connection["roomList"].has(roomId)).toBe(false);
+            });
+
+            it("also looks inside folders that sit in other folders", async () => {
+                const stale = { hasOutdatedType: () => true, destroy: vi.fn() };
+                const inner = folderWith({ [roomId]: stale });
+                const outer = folderWith({}, { inner });
+                const { connection, createdAtRoot } = await connectionWithFolders({ outer });
+
+                connection["onAccountDataEvent"](event(EventType.Direct));
+
+                expect(inner.roomList.get(roomId)).toEqual({ id: roomId, made: true });
+                expect(outer.roomList.has(roomId)).toBe(false);
+                expect(createdAtRoot).not.toHaveBeenCalled();
+            });
+
+            it("leaves chats in folders alone when their type is up to date", async () => {
+                const current = { hasOutdatedType: () => false, destroy: vi.fn() };
+                const folder = folderWith({ [roomId]: current });
+                const { connection, made } = await connectionWithFolders({ folder });
+                const untouched = folder.roomList.get(roomId);
+
+                connection["onAccountDataEvent"](event(EventType.Direct));
+
+                expect(made).not.toHaveBeenCalled();
+                expect(current.destroy).not.toHaveBeenCalled();
+                expect(folder.roomList.get(roomId)).toBe(untouched);
+            });
         });
 
         it("does nothing for other account data", async () => {
