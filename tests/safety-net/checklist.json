@@ -154,7 +154,7 @@
       "runs": "yes",
       "runsNote": "yes",
       "knownGap": false,
-      "hooks": "pills `role=tab` (WokaCard.svelte:257-269); \"More\" `aria-label=\"More\"` (:272-281). Local maps may have one collection: then no pills (expected)"
+      "hooks": "pills `role=tab` (WokaCard.svelte:257-269); \"More\" `aria-label=\"More\"` (:272-281). Local maps may have one collection: then one pill, on, and no swipe hint (expected). Recent is not a pill: a row of up to 4 tiles above the pills (`.woka-recent-row`), only for a player who wore a WOKA before"
     },
     {
       "id": "JN-014",

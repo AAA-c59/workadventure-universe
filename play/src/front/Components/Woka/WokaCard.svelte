@@ -27,7 +27,7 @@
     export let retry: () => void;
     export let randomize: () => void;
     export let close: (() => void) | undefined = undefined;
-    /** The pills over the tiles (collections or parts), shown when there are two or more */
+    /** The pills over the tiles (collections or parts); one collection still shows its pill */
     export let categories: { label: string; count?: number; icon?: ComponentType }[] = [];
     export let category = 0;
     export let swipeHint = "";
@@ -303,7 +303,9 @@
                         <span class="u-eyebrow">{eyebrow}</span>
                         <h2 class="u-join-title">{title}</h2>
                     </header>
-                    {#if categories.length > 1}
+                    <!-- The picker's Recent row: fixed above the pills, it does not scroll or swipe -->
+                    <slot name="recent" />
+                    {#if categories.length > 0}
                         <div class="woka-pills-row relative md:mt-1.5" class:woka-pills-more={morePills}>
                             <div
                                 class="woka-pills flex gap-1.5 overflow-x-auto"
