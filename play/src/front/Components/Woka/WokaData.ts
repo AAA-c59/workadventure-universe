@@ -9,6 +9,9 @@ import type { WokaData, WokaTexture } from "./WokaTypes";
 /** The WOKA parts in the order they are drawn, bottom to top. */
 export const wokaBodyPartOrder = ["body", "eyes", "hair", "clothes", "hat", "accessory", "woka"] as const;
 
+/** How long the picker and the popup wait for `woka/mine` before they go on without it */
+export const wokaMineTimeoutMs = 5000;
+
 let cached: { roomUrl: string; promise: Promise<WokaData> } | undefined;
 
 /**
@@ -79,6 +82,9 @@ export function texturesByPart(textureIds: string[] | null, wokaData: WokaData):
  */
 export async function fetchWokaMine(): Promise<WokaMine | undefined> {
     if (!localUserStore.isLogged() || !hasCapability("api/woka/mine")) return undefined;
+    // The picker and the popup wait for this: a slow answer is dropped after a few seconds, not waited for forever
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), wokaMineTimeoutMs);
     try {
         const roomUrl = gameManager.currentMapRoom.href;
         const response = await fetch(`${ABSOLUTE_PUSHER_URL}woka/mine?roomUrl=${encodeURIComponent(roomUrl)}`, {
@@ -86,6 +92,7 @@ export async function fetchWokaMine(): Promise<WokaMine | undefined> {
                 Authorization: localUserStore.getAuthToken() || "",
             },
             credentials: "include",
+            signal: controller.signal,
         });
         if (!response.ok) return undefined;
         const parsed = wokaMine.safeParse(await response.json());
@@ -93,5 +100,7 @@ export async function fetchWokaMine(): Promise<WokaMine | undefined> {
     } catch (err) {
         console.warn("Cannot load what you wore lately:", err);
         return undefined;
+    } finally {
+        clearTimeout(timer);
     }
 }

@@ -1086,6 +1086,7 @@ class AdminApi implements AdminInterface {
             const res = await axios.get<unknown, AxiosResponse<unknown>>(ADMIN_API_URL + "/api/woka/mine", {
                 headers: { Authorization: `${ADMIN_API_TOKEN}` },
                 params: { roomUrl, uuid: userIdentifier },
+                timeout: 10_000,
             });
             return wokaMine.parse(res.data);
         } catch (err) {

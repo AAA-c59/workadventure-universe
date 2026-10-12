@@ -215,6 +215,7 @@ describe("AdminApi.getWokaMine", () => {
         expect(mocks.get).toHaveBeenCalledWith("http://admin.test/api/woka/mine", {
             headers: { Authorization: "token" },
             params: { roomUrl, uuid: "uuid-1" },
+            timeout: 10_000,
         });
     });
 

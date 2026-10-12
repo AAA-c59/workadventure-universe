@@ -14,7 +14,7 @@ vi.mock("../../../Connection/LocalUserStore", () => ({
 vi.mock("../../../Connection/Capabilities", () => ({ hasCapability: mocks.hasCapability }));
 vi.mock("../../../Enum/ComputedConst", () => ({ ABSOLUTE_PUSHER_URL: "http://pusher.test/" }));
 
-import { fetchWokaMine } from "../WokaData";
+import { fetchWokaMine, wokaMineTimeoutMs } from "../WokaData";
 
 const mine = {
     current: {
@@ -71,6 +71,23 @@ describe("fetchWokaMine", () => {
     it("returns undefined when the answer has the wrong shape", async () => {
         fetchMock.mockResolvedValue({ ok: true, json: () => Promise.resolve({ current: "nope" }) });
         expect(await fetchWokaMine()).toBeUndefined();
+    });
+
+    it("gives up after a few seconds instead of waiting forever", async () => {
+        vi.useFakeTimers();
+        try {
+            fetchMock.mockImplementation(
+                (_url: string, init: { signal: AbortSignal }) =>
+                    new Promise((_resolve, reject) => {
+                        init.signal.onabort = () => reject(new Error("aborted"));
+                    })
+            );
+            const pending = fetchWokaMine();
+            await vi.advanceTimersByTimeAsync(wokaMineTimeoutMs);
+            expect(await pending).toBeUndefined();
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it("returns undefined when the request fails", async () => {
