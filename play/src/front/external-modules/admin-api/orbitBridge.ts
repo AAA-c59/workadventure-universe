@@ -119,6 +119,11 @@ function isBoundedString(value: unknown, min: number, max: number): value is str
     return typeof value === "string" && value.length >= min && value.length <= max;
 }
 
+/** A player name: 1 to 128 characters, and not only spaces (an invite would ring with an empty name). */
+function isPlayerName(value: unknown): value is string {
+    return isBoundedString(value, 1, 128) && value.trim().length > 0;
+}
+
 export function isOrbitBridgeReadyMessage(value: unknown): value is OrbitBridgeReadyMessage {
     return (
         isRecord(value) &&
@@ -148,7 +153,7 @@ export function isOrbitProfileChangedMessage(value: unknown): value is OrbitProf
         value.type === "orbit-profile-changed" &&
         value.version === ORBIT_BRIDGE_VERSION &&
         isBoundedString(value.roomRevision, 16, 128) &&
-        isBoundedString(value.name, 1, 128)
+        isPlayerName(value.name)
     );
 }
 
@@ -158,7 +163,7 @@ function isInvitePersonBase(value: unknown): value is Record<string, unknown> {
         value.version === ORBIT_BRIDGE_VERSION &&
         isBoundedString(value.roomRevision, 16, 128) &&
         isBoundedString(value.uuid, 1, 64) &&
-        isBoundedString(value.name, 1, 128)
+        isPlayerName(value.name)
     );
 }
 
