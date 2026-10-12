@@ -91,6 +91,12 @@
             <span class="min-w-0 flex-1 text-sm leading-snug">{@html iosGuide.text.step3()}</span>
             <span class="chip" aria-hidden="true"><span class="toggle" /></span>
         </div>
+        <p
+            class="m-0 border-t border-white/10 pt-3 text-center text-[13px] text-white/60"
+            data-testid="install-guide-already"
+        >
+            {$LL.install.guide.alreadyAdded()}
+        </p>
     </div>
     {#if $guideOpenStore === "iphone-safari"}
         <div class="hint pointer-events-none absolute bottom-[70px] right-[18px] z-[1101]" aria-hidden="true">

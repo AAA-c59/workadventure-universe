@@ -24,7 +24,12 @@ export interface InstallStorage {
     /** The install was already counted on this device. */
     isInstallReported(): boolean;
     markInstallReported(): void;
+    /** Forget that the app was installed (the browser offers the install again, so it is gone). */
+    clearInstallReported(): void;
 }
+
+/** What navigator.getInstalledRelatedApps gives: the apps of our own manifest that are installed. */
+export type InstalledAppsLookup = () => Promise<readonly unknown[]>;
 
 export interface InstallAnalytics {
     cardShown(): void;
@@ -61,6 +66,7 @@ export class InstallApp {
     /** The one-time card is on screen. */
     public readonly cardVisibleStore: Readable<boolean>;
 
+    private readonly installedHere: boolean;
     private readonly promptStore = writable<BeforeInstallPromptEvent | undefined>(undefined);
     private readonly installedStore: Writable<boolean>;
     private readonly firstMomentStore = writable(false);
@@ -70,9 +76,12 @@ export class InstallApp {
 
     constructor(private readonly options: InstallAppOptions) {
         const { env, quiet, storage, analytics } = options;
-        const installedHere = isInstalledApp(env);
-        this.installedStore = writable(installedHere);
-        this.guide = installedHere ? undefined : installGuideFor(env);
+        this.installedHere = isInstalledApp(env);
+        this.guide = this.installedHere ? undefined : installGuideFor(env);
+        // Chrome, Edge and Android remember an install made from here. Apple's browsers cannot tell (no event, and
+        // the Home Screen app keeps its own storage), so for them the row stays.
+        const installedBefore = this.guide === undefined && storage.isInstallReported();
+        this.installedStore = writable(this.installedHere || installedBefore);
 
         // Chrome and Edge only say "installable" with their event; Apple's browsers are always installable by hand.
         this.canInstallStore = derived(
@@ -101,7 +110,7 @@ export class InstallApp {
         );
 
         // An app already installed and opened here is counted once, on the device that holds its own storage (iPhone).
-        if (installedHere && !storage.isInstallReported()) {
+        if (this.installedHere && !storage.isInstallReported()) {
             storage.markInstallReported();
             analytics.installed("app");
         }
@@ -111,15 +120,32 @@ export class InstallApp {
      * Listens for the browser's install event. Called once, as early as possible: the event comes only once.
      * Returns what stops listening.
      */
-    public start(target: Pick<Window, "addEventListener" | "removeEventListener">): () => void {
+    public start(
+        target: Pick<Window, "addEventListener" | "removeEventListener">,
+        installedApps?: InstalledAppsLookup
+    ): () => void {
         const onBeforeInstallPrompt = (event: Event) => {
             // The browser's own mini bar would come before our card: we choose the moment.
             event.preventDefault();
             this.promptStore.set(event as BeforeInstallPromptEvent);
+            // The browser only offers the install when the app is not installed: if it was removed, the row is back.
+            if (!this.installedHere && get(this.installedStore)) {
+                this.options.storage.clearInstallReported();
+                this.installedStore.set(false);
+            }
         };
         const onAppInstalled = () => this.markInstalled("browser");
         target.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
         target.addEventListener("appinstalled", onAppInstalled);
+        // Installed earlier (from another tab, or before this device remembered it): the browser knows, if it can say.
+        // Best effort: where it cannot, the row simply stays until the first install here.
+        if (installedApps !== undefined && this.guide === undefined) {
+            installedApps()
+                .then((apps) => {
+                    if (apps.length > 0 && get(this.promptStore) === undefined) this.markAlreadyInstalled();
+                })
+                .catch(() => undefined);
+        }
         return () => {
             target.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
             target.removeEventListener("appinstalled", onAppInstalled);
@@ -169,6 +195,13 @@ export class InstallApp {
 
     public closeGuide(): void {
         this.guideOpenStore.set(undefined);
+    }
+
+    /** The app is installed already: step aside, with no toast and no new count. */
+    private markAlreadyInstalled(): void {
+        this.installedStore.set(true);
+        this.cardShownStore.set(false);
+        this.options.storage.markInstallReported();
     }
 
     private markInstalled(source: InstallSource): void {

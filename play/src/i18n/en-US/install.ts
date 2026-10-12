@@ -35,6 +35,8 @@ const install: BaseTranslation = {
             step3: "Keep <b>Open as Web App</b> on, then tap <b>Add</b>.",
         },
         addToHomeScreen: "Add to Home Screen",
+        // Safari cannot tell whether the app is already there, so the sheet says where to find it
+        alreadyAdded: "Already added? Open Universe from your Home Screen.",
         openInSafari: {
             title: "Open Universe in Safari to install it",
             text: "This app's own browser can't add apps to your Home Screen. Copy the link, open Safari and paste it.",

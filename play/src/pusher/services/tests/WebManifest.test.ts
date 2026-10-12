@@ -60,8 +60,17 @@ describe("buildWebManifest", () => {
         expect(manifest.display).toBe("standalone");
         expect(manifest).not.toHaveProperty("orientation");
         expect(manifest).not.toHaveProperty("display_override");
-        expect(manifest).not.toHaveProperty("related_applications");
         expect(manifest.scope).toBe("/");
+    });
+
+    it("lists only its own manifest as a related app, never workadventu.re's", () => {
+        expect(buildWebManifest(meta, "https://play.test/@/bawes/lobby/main").related_applications).toEqual([
+            {
+                platform: "webapp",
+                url: "https://play.test/static/images/favicons/manifest.json?url=https://play.test/@/bawes/lobby/main",
+            },
+        ]);
+        expect(buildWebManifest(meta, "not a url").related_applications).toEqual([]);
     });
 
     it("brings the open window forward when a Universe link is opened", () => {

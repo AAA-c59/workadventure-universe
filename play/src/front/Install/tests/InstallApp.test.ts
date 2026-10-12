@@ -33,6 +33,9 @@ function memoryStorage(seen = false, reported = false): InstallStorage & { seen:
         markInstallReported: () => {
             storage.reported = true;
         },
+        clearInstallReported: () => {
+            storage.reported = false;
+        },
     };
     return storage;
 }
@@ -76,13 +79,19 @@ describe("InstallApp", () => {
         vi.useRealTimers();
     });
 
-    function setup(options: { env?: InstallEnvironment; storage?: ReturnType<typeof memoryStorage> } = {}) {
+    function setup(
+        options: {
+            env?: InstallEnvironment;
+            storage?: ReturnType<typeof memoryStorage>;
+            installedApps?: () => Promise<readonly unknown[]>;
+        } = {}
+    ) {
         const quiet = writable(true);
         const storage = options.storage ?? memoryStorage();
         const analytics = fakeAnalytics();
         const win = fakeWindow();
         const app = new InstallApp({ env: options.env ?? env(IPHONE_SAFARI), quiet, storage, analytics });
-        app.start(win);
+        app.start(win, options.installedApps);
         return { app, quiet, storage, analytics, win };
     }
 
@@ -242,6 +251,66 @@ describe("InstallApp", () => {
             win.fire("appinstalled");
             expect(analytics.installed).toHaveBeenCalledWith("browser");
             expect(get(app.canInstallStore)).toBe(false);
+        });
+    });
+
+    describe("an app installed earlier in this browser", () => {
+        it("brings the row back when the browser offers the install again (the app was removed)", () => {
+            const { app, win } = setup({ env: env(CHROME), storage: memoryStorage(false, true) });
+            win.fire("beforeinstallprompt", installEvent("accepted").event);
+            // the browser offers the install again: the app was removed, so the row is back
+            expect(get(app.canInstallStore)).toBe(true);
+        });
+
+        it("keeps the row hidden when the browser sends no install offer", () => {
+            const { app } = setup({ env: env(CHROME), storage: memoryStorage(false, true) });
+            expect(get(app.canInstallStore)).toBe(false);
+        });
+
+        it("forgets the old install when the browser offers it again, so a new one counts", () => {
+            const storage = memoryStorage(false, true);
+            const { win } = setup({ env: env(CHROME), storage });
+            win.fire("beforeinstallprompt", installEvent("accepted").event);
+            expect(storage.reported).toBe(false);
+        });
+
+        it("steps aside when the browser says the app is installed, with no toast and no count", async () => {
+            const { app, analytics } = setup({ env: env(CHROME), installedApps: () => Promise.resolve([{}]) });
+            await vi.advanceTimersByTimeAsync(0);
+            expect(get(app.canInstallStore)).toBe(false);
+            expect(get(app.installedToastStore)).toBe(false);
+            expect(analytics.installed).not.toHaveBeenCalled();
+        });
+
+        it("stays when the browser lists no installed app, or cannot say", async () => {
+            const none = setup({ env: env(CHROME), installedApps: () => Promise.resolve([]) });
+            none.win.fire("beforeinstallprompt", installEvent("accepted").event);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(get(none.app.canInstallStore)).toBe(true);
+            const broken = setup({ env: env(CHROME), installedApps: () => Promise.reject(new Error("no")) });
+            broken.win.fire("beforeinstallprompt", installEvent("accepted").event);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(get(broken.app.canInstallStore)).toBe(true);
+        });
+
+        it("ignores a lookup that comes after the browser's own install offer", async () => {
+            let answer: (apps: readonly unknown[]) => void = () => undefined;
+            const { app, win } = setup({
+                env: env(CHROME),
+                installedApps: () =>
+                    new Promise((resolve) => {
+                        answer = resolve;
+                    }),
+            });
+            win.fire("beforeinstallprompt", installEvent("accepted").event);
+            answer([{}]);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(get(app.canInstallStore)).toBe(true);
+        });
+
+        it("keeps the row on iPhone Safari, which cannot tell", () => {
+            const { app } = setup({ storage: memoryStorage(false, true) });
+            expect(get(app.canInstallStore)).toBe(true);
         });
     });
 

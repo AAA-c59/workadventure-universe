@@ -301,6 +301,10 @@ class LocalUserStore {
     markInstallReported(): void {
         localStorage.setItem(installReportedKey, "true");
     }
+    /** The browser offers the install again: the app was removed, so a new install counts again. */
+    clearInstallReported(): void {
+        localStorage.removeItem(installReportedKey);
+    }
 
     /** Whether a last room was ever saved here (otherwise getLastRoomUrl gives the start page). */
     hasLastRoomUrl(): boolean {

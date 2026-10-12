@@ -30,8 +30,18 @@ export function roomPathOfPage(pageUrl: string): string | undefined {
  * "/", which opens the last room; the room it was installed from rides along in the start address so the very first
  * launch, with empty storage (an iPhone keeps its home screen app's storage apart from Safari's), lands there too.
  */
+/** The address the page links its manifest from, absolute: the browser matches it against the installed app. */
+export function manifestUrlOfPage(pageUrl: string): string | undefined {
+    try {
+        return `${new URL(pageUrl).origin}/static/images/favicons/manifest.json?url=${pageUrl}`;
+    } catch {
+        return undefined;
+    }
+}
+
 export function buildWebManifest(metaTagsData: RequiredMetaTagsData, pageUrl: string) {
     const roomPath = roomPathOfPage(pageUrl);
+    const manifestUrl = manifestUrlOfPage(pageUrl);
     return {
         id: "/",
         name: metaTagsData.appName,
@@ -62,6 +72,9 @@ export function buildWebManifest(metaTagsData: RequiredMetaTagsData, pageUrl: st
             },
         ],
         description: metaTagsData.description,
+        // Our own manifest only: this is how Chrome and Edge can tell the page that the app is already installed
+        // (navigator.getInstalledRelatedApps), so the install card and menu row can step aside.
+        related_applications: manifestUrl ? [{ platform: "webapp", url: manifestUrl }] : [],
         screenshots: [],
     };
 }

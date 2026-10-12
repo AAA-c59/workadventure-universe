@@ -57,6 +57,7 @@ export const installApp = new InstallApp({
         markCardSeen: () => localUserStore.markInstallCardSeen(),
         isInstallReported: () => localUserStore.isInstallReported(),
         markInstallReported: () => localUserStore.markInstallReported(),
+        clearInstallReported: () => localUserStore.clearInstallReported(),
     },
     analytics: {
         cardShown: () => analyticsClient.installCardShown(),
@@ -71,7 +72,10 @@ export const installApp = new InstallApp({
  */
 export function startInstallApp(): void {
     // Never stopped: it listens as long as the game is open.
-    installApp.start(window);
+    // Only Chrome and Edge can say which of our apps are installed.
+    const lookup = (navigator as Navigator & { getInstalledRelatedApps?: () => Promise<readonly unknown[]> })
+        .getInstalledRelatedApps;
+    installApp.start(window, lookup ? () => lookup.call(navigator) : undefined);
 
     // "In a room": the game scene is loaded. A conversation that ends is the first good moment.
     // Both subscriptions live as long as the game does.
