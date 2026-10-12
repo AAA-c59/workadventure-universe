@@ -192,6 +192,8 @@ function invitePersonFromOrbit(uuid: string, name: string) {
     if (uuid === localUserStore.getLocalUser()?.uuid || blackListManager.isBlackListed(uuid)) return;
     closeAdminModal();
     // After closing, so a rejoin for a new name has already dropped the old connection and the invite uses the new one.
+    // The wait's result is not checked on purpose: when the connection never came back (15 seconds), `ring` fails by
+    // itself and shows the same "failed" toast as any invite that can't be sent, so there is nothing more to stop here.
     ringStore
         .whenConnected(ROOM_CONNECTION_WAIT_MS)
         .then(() => ringStore.ring(uuid, name))
@@ -202,7 +204,9 @@ function invitePersonFromOrbit(uuid: string, name: string) {
 function messagePersonFromOrbit(chatId: string) {
     if (chatId === localUserStore.getChatId()) return;
     closeAdminModal();
-    // Like an invite, it waits out a rejoin so the chat opens in the room you end up in.
+    // Like an invite, it waits out a rejoin so the chat opens in the room you end up in. The wait's result is not
+    // checked on purpose: the chat connection belongs to the game manager and outlives a rejoin, so after the 15
+    // seconds the chat can still open, and stopping here would make Message do nothing when it could have worked.
     ringStore
         .whenConnected(ROOM_CONNECTION_WAIT_MS)
         .then(() => openDirectChatRoom(chatId))

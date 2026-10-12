@@ -627,6 +627,30 @@ describe("The Orbit bridge", () => {
                 expect(mocks.ring).toHaveBeenCalledWith("uuid-ali", "Ali");
             });
 
+            it("still tries the invite after the wait times out, and ring reports the failure itself", async () => {
+                const revision = await renameThenOpen();
+                fromOrbit(invite(revision));
+                await settle();
+                expect(mocks.ring).not.toHaveBeenCalled();
+
+                // No connection within the wait: `ring` fails by itself (and shows its "failed" toast).
+                connect(false);
+                await settle();
+                expect(order.at(-1)).toBe("ring");
+                expect(mocks.ring).toHaveBeenCalledWith("uuid-ali", "Ali");
+            });
+
+            it("still opens their chat after the wait times out, as the chat connection survives a rejoin", async () => {
+                const revision = await renameThenOpen();
+                fromOrbit(message(revision));
+                await settle();
+                expect(mocks.openDirectChatRoom).not.toHaveBeenCalled();
+
+                connect(false);
+                await settle();
+                expect(order.at(-1)).toBe("open chat");
+            });
+
             it("opens their chat once the new connection is up", async () => {
                 const revision = await renameThenOpen();
                 fromOrbit(message(revision));
