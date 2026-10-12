@@ -30,10 +30,17 @@ export function roomPathOfPage(pageUrl: string): string | undefined {
  * "/", which opens the last room; the room it was installed from rides along in the start address so the very first
  * launch, with empty storage (an iPhone keeps its home screen app's storage apart from Safari's), lands there too.
  */
-/** The address the page links its manifest from, absolute: the browser matches it against the installed app. */
+/**
+ * The address the page links its manifest from, absolute: the browser matches it against the installed app. It
+ * carries the room's origin and path only, never the page's query or hash (they can hold a login token), and is
+ * encoded the same way the page encodes it when the room changes (see pointManifestAtRoom).
+ */
 export function manifestUrlOfPage(pageUrl: string): string | undefined {
     try {
-        return `${new URL(pageUrl).origin}/static/images/favicons/manifest.json?url=${pageUrl}`;
+        const origin = new URL(pageUrl).origin;
+        const manifestUrl = new URL("/static/images/favicons/manifest.json", origin);
+        manifestUrl.searchParams.set("url", origin + (roomPathOfPage(pageUrl) ?? "/"));
+        return manifestUrl.href;
     } catch {
         return undefined;
     }

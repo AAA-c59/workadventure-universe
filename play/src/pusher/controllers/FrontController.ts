@@ -8,7 +8,7 @@ import Debug from "debug";
 import { MetaTagsBuilder } from "../services/MetaTagsBuilder";
 import { absoluteUrl, requestProtocol } from "../services/AbsoluteUrl";
 import { adminService } from "../services/AdminService";
-import { buildWebManifest } from "../services/WebManifest";
+import { buildWebManifest, manifestUrlOfPage } from "../services/WebManifest";
 import { getStringPalette, wrapWithStyleTag } from "../services/GenerateCustomColors";
 import { notWaHost } from "../middlewares/NotWaHost";
 import { version } from "../../../package.json";
@@ -372,6 +372,8 @@ export class FrontController extends BaseHttpController {
                 // TODO change it to push data from admin
                 msApplicationTileImage: metaTagsData.favIcons[metaTagsData.favIcons.length - 1].src,
                 url,
+                manifestUrl:
+                    manifestUrlOfPage(url) ?? "/static/images/favicons/manifest.json?url=" + encodeURIComponent(url),
                 script: await this.getScript(),
                 authToken: authToken,
                 googleDrivePickerClientId: GOOGLE_DRIVE_PICKER_CLIENT_ID,

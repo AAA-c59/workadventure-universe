@@ -287,23 +287,45 @@ class LocalUserStore {
         }
     }
 
+    // The install flag reads and writes never throw: a browser that blocks storage must still start the game.
     /** The install card was shown (or dismissed) on this device: it never shows again. */
     isInstallCardSeen(): boolean {
-        return localStorage.getItem(installCardSeenKey) === "true";
+        return this.readInstallFlag(installCardSeenKey);
     }
     markInstallCardSeen(): void {
-        localStorage.setItem(installCardSeenKey, "true");
+        this.writeInstallFlag(installCardSeenKey, true);
     }
     /** The install of the app was already counted on this device. */
     isInstallReported(): boolean {
-        return localStorage.getItem(installReportedKey) === "true";
+        return this.readInstallFlag(installReportedKey);
     }
     markInstallReported(): void {
-        localStorage.setItem(installReportedKey, "true");
+        this.writeInstallFlag(installReportedKey, true);
     }
     /** The browser offers the install again: the app was removed, so a new install counts again. */
     clearInstallReported(): void {
-        localStorage.removeItem(installReportedKey);
+        this.writeInstallFlag(installReportedKey, false);
+    }
+
+    private readInstallFlag(key: string): boolean {
+        try {
+            return localStorage.getItem(key) === "true";
+        } catch (e) {
+            console.warn("Could not read the install state from the browser storage", e);
+            return false;
+        }
+    }
+
+    private writeInstallFlag(key: string, value: boolean): void {
+        try {
+            if (value) {
+                localStorage.setItem(key, "true");
+            } else {
+                localStorage.removeItem(key);
+            }
+        } catch (e) {
+            console.warn("Could not save the install state in the browser storage", e);
+        }
     }
 
     /** Whether a last room was ever saved here (otherwise getLastRoomUrl gives the start page). */

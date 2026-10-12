@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RequiredMetaTagsData } from "@workadventure/messages";
-import { buildWebManifest, roomPathOfPage } from "../WebManifest";
+import { buildWebManifest, manifestUrlOfPage, roomPathOfPage } from "../WebManifest";
 
 const meta: RequiredMetaTagsData = {
     title: "Universe | Bawes > Lobby > Main",
@@ -73,10 +73,22 @@ describe("buildWebManifest", () => {
         expect(buildWebManifest(meta, "https://play.test/@/bawes/lobby/main").related_applications).toEqual([
             {
                 platform: "webapp",
-                url: "https://play.test/static/images/favicons/manifest.json?url=https://play.test/@/bawes/lobby/main",
+                url: "https://play.test/static/images/favicons/manifest.json?url=https%3A%2F%2Fplay.test%2F%40%2Fbawes%2Flobby%2Fmain",
             },
         ]);
         expect(buildWebManifest(meta, "not a url").related_applications).toEqual([]);
+    });
+
+    it("links the manifest by room path only, never the page's query or hash (they can hold a login token)", () => {
+        const linked = (page: string) => new URL(manifestUrlOfPage(page) ?? "").searchParams.get("url");
+        expect(linked("https://play.test/@/bawes/lobby/main?token=secret#spawn")).toBe(
+            "https://play.test/@/bawes/lobby/main"
+        );
+        expect(linked("https://play.test/")).toBe("https://play.test/");
+        expect(linked("https://play.test/?installRoom=%2F%40%2Fbawes%2Flobby%2Fmain")).toBe(
+            "https://play.test/@/bawes/lobby/main"
+        );
+        expect(manifestUrlOfPage("not a url")).toBeUndefined();
     });
 
     it("brings the open window forward when a Universe link is opened", () => {
