@@ -44,6 +44,16 @@ const install: BaseTranslation = {
             copied: "Link copied",
             notNow: "Not now",
         },
+        // After the browser's own install window was cancelled: it cannot open twice, so point at the browser's menu
+        browserMenu: {
+            title: "Install Universe from your browser's menu",
+            androidStep1: "Tap <b>⋮</b> at the top right of your browser.",
+            androidStep2: "Tap <b>Install app</b>, then <b>Install</b>.",
+            desktopStep1: "Click <b>⋮</b> at the top right of your browser.",
+            desktopStep2:
+                "Choose <b>Install Universe</b>. In Edge: <b>Apps</b>, then <b>Install this site as an app</b>.",
+            gotIt: "Got it",
+        },
         macSafari: {
             title: "Add Universe to your Dock",
             step1: "Click <b>File</b> in the menu bar at the top.",

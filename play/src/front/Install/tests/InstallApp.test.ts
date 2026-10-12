@@ -8,6 +8,8 @@ const IPHONE_SAFARI =
     "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1";
 const CHROME =
     "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36";
+const DESKTOP_CHROME =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
 const FIREFOX = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:130.0) Gecko/20100101 Firefox/130.0";
 
 function env(userAgent: string, overrides: Partial<InstallEnvironment> = {}): InstallEnvironment {
@@ -244,6 +246,58 @@ describe("InstallApp", () => {
             await app.install("menu");
             expect(get(app.installedToastStore)).toBe(false);
             expect(analytics.installed).not.toHaveBeenCalled();
+        });
+
+        it("keeps the row after a cancel and points at the browser's own menu, since its window cannot open twice", async () => {
+            const { app, win } = setup({ env: env(CHROME) });
+            const { event, prompt } = installEvent("dismissed");
+            win.fire("beforeinstallprompt", event);
+            await app.install("menu");
+            expect(get(app.canInstallStore)).toBe(true);
+            await app.install("menu");
+            expect(prompt).toHaveBeenCalledTimes(1);
+            expect(get(app.guideOpenStore)).toBe("browser-menu-android");
+            app.closeGuide();
+            expect(get(app.guideOpenStore)).toBeUndefined();
+        });
+
+        it("points a computer at the browser's menu too", async () => {
+            const { app, win } = setup({ env: env(DESKTOP_CHROME) });
+            win.fire("beforeinstallprompt", installEvent("dismissed").event);
+            await app.install("menu");
+            await app.install("menu");
+            expect(get(app.guideOpenStore)).toBe("browser-menu-desktop");
+        });
+
+        it("keeps the row when the browser's window fails to open", async () => {
+            const { app, win } = setup({ env: env(CHROME) });
+            const { event } = installEvent("accepted");
+            event.prompt = vi.fn(() => Promise.reject(new Error("used already")));
+            vi.spyOn(console, "warn").mockImplementation(() => undefined);
+            win.fire("beforeinstallprompt", event);
+            await app.install("menu");
+            expect(get(app.canInstallStore)).toBe(true);
+        });
+
+        it("never shows the card after the player cancelled the browser's window", async () => {
+            const { app, win, storage } = setup({ env: env(CHROME) });
+            win.fire("beforeinstallprompt", installEvent("dismissed").event);
+            await app.install("menu");
+            expect(storage.seen).toBe(true);
+            app.noteConversationEnded();
+            expect(get(app.cardVisibleStore)).toBe(false);
+        });
+
+        it("uses the browser's window again when it offers a new one after a cancel", async () => {
+            const { app, win } = setup({ env: env(CHROME) });
+            win.fire("beforeinstallprompt", installEvent("dismissed").event);
+            await app.install("menu");
+            const second = installEvent("accepted");
+            win.fire("beforeinstallprompt", second.event);
+            await app.install("menu");
+            expect(second.prompt).toHaveBeenCalledTimes(1);
+            expect(get(app.guideOpenStore)).toBeUndefined();
+            expect(get(app.installedToastStore)).toBe(true);
         });
 
         it("counts an app installed from the browser's own menu", () => {

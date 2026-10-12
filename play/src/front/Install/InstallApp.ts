@@ -1,7 +1,7 @@
 import type { Readable, Writable } from "svelte/store";
 import { derived, get, writable } from "svelte/store";
 import type { InstallEnvironment, InstallGuide } from "./InstallPlatform";
-import { installGuideFor, isInstalledApp } from "./InstallPlatform";
+import { browserMenuGuideFor, installGuideFor, isInstalledApp } from "./InstallPlatform";
 
 /** After this long in a room, with no conversation yet, the card may show. */
 export const FIRST_MOMENT_MS = 3 * 60 * 1000;
@@ -67,6 +67,8 @@ export class InstallApp {
     public readonly cardVisibleStore: Readable<boolean>;
 
     private readonly installedHere: boolean;
+    /** The browser's install window was opened and cancelled: it cannot open twice, so the row points at the browser's menu. */
+    private readonly promptSpentStore = writable(false);
     private readonly promptStore = writable<BeforeInstallPromptEvent | undefined>(undefined);
     private readonly installedStore: Writable<boolean>;
     private readonly firstMomentStore = writable(false);
@@ -85,8 +87,8 @@ export class InstallApp {
 
         // Chrome and Edge only say "installable" with their event; Apple's browsers are always installable by hand.
         this.canInstallStore = derived(
-            [this.installedStore, this.promptStore],
-            ([installed, prompt]) => !installed && (prompt !== undefined || this.guide !== undefined)
+            [this.installedStore, this.promptStore, this.promptSpentStore],
+            ([installed, prompt, spent]) => !installed && (prompt !== undefined || spent || this.guide !== undefined)
         );
 
         const ready = derived(
@@ -128,6 +130,7 @@ export class InstallApp {
             // The browser's own mini bar would come before our card: we choose the moment.
             event.preventDefault();
             this.promptStore.set(event as BeforeInstallPromptEvent);
+            this.promptSpentStore.set(false);
             // The browser only offers the install when the app is not installed: if it was removed, the row is back.
             if (!this.installedHere && get(this.installedStore)) {
                 this.options.storage.clearInstallReported();
@@ -183,18 +186,29 @@ export class InstallApp {
                 await prompt.prompt();
                 const choice = await prompt.userChoice;
                 if (choice.outcome === "accepted") this.markInstalled(source);
+                // Cancelled: the window cannot open again, so the row stays and points at the browser's own menu.
+                else this.markPromptSpent();
             } catch (error) {
                 console.warn("The browser could not open its install window", error);
+                this.markPromptSpent();
             }
             return;
         }
         if (this.guide !== undefined) {
             this.guideOpenStore.set(this.guide);
+        } else if (get(this.promptSpentStore)) {
+            this.guideOpenStore.set(browserMenuGuideFor(this.options.env));
         }
     }
 
     public closeGuide(): void {
         this.guideOpenStore.set(undefined);
+    }
+
+    /** The player has seen the browser's own window, so the card never offers it again either. */
+    private markPromptSpent(): void {
+        this.promptSpentStore.set(true);
+        this.options.storage.markCardSeen();
     }
 
     /** The app is installed already: step aside, with no toast and no new count. */
@@ -209,6 +223,7 @@ export class InstallApp {
         this.installedStore.set(true);
         this.cardShownStore.set(false);
         this.guideOpenStore.set(undefined);
+        this.promptSpentStore.set(false);
         this.options.storage.markInstallReported();
         this.options.analytics.installed(source);
         this.installedToastStore.set(true);

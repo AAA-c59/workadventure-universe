@@ -151,6 +151,62 @@
             </button>
         </div>
     </div>
+{:else if $guideOpenStore === "browser-menu-android" || $guideOpenStore === "browser-menu-desktop"}
+    <!-- The browser's own install window was cancelled and cannot open twice: point at the browser's menu. -->
+    <div
+        class="u-surface pointer-events-auto absolute left-1/2 top-[110px] z-[1100] flex w-[440px] max-w-[calc(100vw-1rem)] -translate-x-1/2 flex-col gap-3 rounded-[20px] p-5 text-white"
+        role="dialog"
+        aria-label={$LL.install.guide.browserMenu.title()}
+        data-testid="install-guide"
+        transition:fly={{ y: -50, duration: 300 }}
+    >
+        <div class="flex items-center gap-3">
+            {#if iconSrc}
+                <img class="h-12 w-12 flex-none rounded-[22%]" src={iconSrc} alt="" />
+            {/if}
+            <b class="flex-1 text-lg leading-tight">{$LL.install.guide.browserMenu.title()}</b>
+            <button
+                type="button"
+                class="u-close"
+                aria-label={$LL.install.guide.close()}
+                on:click={() => installApp.closeGuide()}
+            >
+                <IconX font-size="18" aria-hidden="true" />
+            </button>
+        </div>
+        <div class="flex min-h-12 items-center gap-3">
+            <span
+                class="grid h-[26px] w-[26px] flex-none place-items-center rounded-full bg-gradient-to-r from-[#8629fc] to-[#4156f6] text-[13px] font-bold"
+                >1</span
+            >
+            <span class="min-w-0 flex-1 text-sm leading-snug"
+                >{@html $guideOpenStore === "browser-menu-android"
+                    ? $LL.install.guide.browserMenu.androidStep1()
+                    : $LL.install.guide.browserMenu.desktopStep1()}</span
+            >
+        </div>
+        <div class="flex min-h-12 items-center gap-3">
+            <span
+                class="grid h-[26px] w-[26px] flex-none place-items-center rounded-full bg-white/10 text-[13px] font-bold"
+                >2</span
+            >
+            <span class="min-w-0 flex-1 text-sm leading-snug"
+                >{@html $guideOpenStore === "browser-menu-android"
+                    ? $LL.install.guide.browserMenu.androidStep2()
+                    : $LL.install.guide.browserMenu.desktopStep2()}</span
+            >
+        </div>
+        <div class="flex">
+            <button
+                type="button"
+                class="u-cta-secondary flex min-h-[44px] flex-1 items-center justify-center whitespace-nowrap rounded-full px-4 text-sm font-bold"
+                data-testid="install-guide-close"
+                on:click={() => installApp.closeGuide()}
+            >
+                {$LL.install.guide.browserMenu.gotIt()}
+            </button>
+        </div>
+    </div>
 {:else if $guideOpenStore === "mac-safari"}
     <!-- Mac Safari has no install button either: File, then Add to Dock. -->
     <div

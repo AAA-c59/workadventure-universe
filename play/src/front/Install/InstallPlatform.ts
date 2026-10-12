@@ -15,7 +15,10 @@ export type InstallGuide =
     /** iPhone and iPad, inside Instagram, WhatsApp and the like, or in a browser other than Safari and Chrome: no way in, so open Safari. */
     | "open-in-safari"
     /** Mac, Safari 17 and later: File > Add to Dock. */
-    | "mac-safari";
+    | "mac-safari"
+    /** Chrome, Edge and Android browsers after the player cancelled their install window: it cannot open twice, so point at the browser's own menu. */
+    | "browser-menu-android"
+    | "browser-menu-desktop";
 
 export interface InstallEnvironment {
     userAgent: string;
@@ -71,4 +74,9 @@ export function currentInstallEnvironment(): InstallEnvironment {
             matches("(display-mode: standalone)") || matches("(display-mode: window-controls-overlay)"),
         navigatorStandalone: (navigator as Navigator & { standalone?: boolean }).standalone === true,
     };
+}
+
+/** The guide for the browser's own menu, for when its install window was cancelled and cannot open again. */
+export function browserMenuGuideFor(env: InstallEnvironment): Extract<InstallGuide, `browser-menu-${string}`> {
+    return /Android/.test(env.userAgent) ? "browser-menu-android" : "browser-menu-desktop";
 }

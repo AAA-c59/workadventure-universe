@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { InstallEnvironment } from "../InstallPlatform";
-import { installGuideFor, isInstalledApp } from "../InstallPlatform";
+import { browserMenuGuideFor, installGuideFor, isInstalledApp } from "../InstallPlatform";
 
 const IPHONE_SAFARI =
     "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1";
@@ -77,6 +77,13 @@ describe("installGuideFor", () => {
 
     it("has no way in on Firefox for a computer", () => {
         expect(installGuideFor(env(WINDOWS_FIREFOX, { platform: "Win32" }))).toBeUndefined();
+    });
+});
+
+describe("browserMenuGuideFor", () => {
+    it("tells Android from a computer", () => {
+        expect(browserMenuGuideFor(env(ANDROID_CHROME, { platform: "Linux armv81" }))).toBe("browser-menu-android");
+        expect(browserMenuGuideFor(env(MAC_CHROME, { platform: "MacIntel" }))).toBe("browser-menu-desktop");
     });
 });
 
