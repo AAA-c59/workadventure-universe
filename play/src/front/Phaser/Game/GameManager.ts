@@ -180,6 +180,8 @@ export class GameManager {
 
     public gameSceneIsCreated(scene: GameScene) {
         this.currentGameSceneName = scene.scene.key;
+        // The page does not reload between maps: what is saved from here on belongs to this map's room.
+        connectionManager.setCurrentRoom(scene.room);
         menuIconVisiblilityStore.set(true);
     }
 
