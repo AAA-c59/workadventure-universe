@@ -49,7 +49,7 @@ test.describe("Map editor @oidc @nomobile @nowebkit", () => {
         // Go live from the Broadcast card
         await Menu.toggleMegaphoneButton(page);
         await Menu.startLiveBroadcast(page);
-        await expect(page2.getByText("Admin1", { exact: true })).toBeVisible({ timeout: 15_000 });
+        await expect(page2.locator("#cameras-container").getByText("Admin1", { exact: true })).toBeVisible({ timeout: 15_000 });
         await Menu.stopLiveBroadcast(page);
 
         await page2.context().close();
