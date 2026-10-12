@@ -17,7 +17,7 @@ let loadedRoomUrl: string | null = null;
 let inFlight: { roomUrl: string; promise: Promise<void> } | null = null;
 
 function currentRoomUrl(): string | null {
-    return gameManager?.currentStartedRoom?.href || window.location.href || null;
+    return gameManager?.currentMapRoom?.href || window.location.href || null;
 }
 
 /**
