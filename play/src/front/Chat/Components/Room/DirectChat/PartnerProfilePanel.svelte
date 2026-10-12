@@ -87,7 +87,7 @@
     $: canInvite = canInvitePartner(partner, $invitesEnabledStore);
     $: tiles = [canInvite, partner.actions.walkTo, partner.actions.locate, canViewProfile].filter(Boolean).length;
     // Add friend, or what comes next with them. Remove friend is red, so it sits with the other red rows.
-    $: friendAction = partnerFriendAction(partner, $roomName, $friendsEnabledStore, $relationshipsStore, $LL);
+    $: friendAction = partnerFriendAction(partner, name, $friendsEnabledStore, $relationshipsStore, $LL);
     $: friendRequestPossible = partner.uuid !== undefined && !$relationshipsStore.has(partner.uuid);
 
     function toggleMute() {
@@ -178,7 +178,7 @@
                         type="button"
                         class="partner-tile"
                         data-testid="partnerInvite"
-                        on:click={() => invitePartner(partner, $roomName)}
+                        on:click={() => invitePartner(partner, name)}
                     >
                         <span class="partner-tile-icon"><IconUsersPlus font-size="20" /></span>
                         {$LL.chat.friends.ring.ring()}
@@ -222,7 +222,7 @@
                     <span class="flex min-w-0 flex-1 flex-col">
                         <span class="truncate">{friendAction.label}</span>
                         {#if friendRequestPossible}
-                            <span class="partner-hint">{$LL.chat.friends.addFriendHint({ name: $roomName })}</span>
+                            <span class="partner-hint">{$LL.chat.friends.addFriendHint({ name })}</span>
                         {/if}
                     </span>
                 </button>
