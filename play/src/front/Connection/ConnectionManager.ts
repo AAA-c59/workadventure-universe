@@ -846,6 +846,17 @@ class ConnectionManager {
         return response;
     }
 
+    /**
+     * The game token a save recovered with after a 401. Keep it for the next room change too: joining a room prefers the
+     * stored token (#802), so one kept only in memory would leave a stale one behind.
+     * Today this is never reached: `/me` needs the token as a `token` query parameter and, like the save endpoints,
+     * checks the same game token, so the recovery fails before it gets here (#833).
+     */
+    private adoptRefreshedAuthToken(authToken: string): void {
+        this.authToken = authToken;
+        localUserStore.setAuthToken(authToken);
+    }
+
     async saveName(name: string): Promise<boolean> {
         if (hasCapability("api/save-name") && this.authToken !== undefined) {
             try {
@@ -875,7 +886,7 @@ class ConnectionManager {
                             console.error("saveTextures: /me returned non-ok status");
                             return false;
                         }
-                        this.authToken = (parsed as { authToken: string }).authToken;
+                        this.adoptRefreshedAuthToken((parsed as { authToken: string }).authToken);
                         await axiosToPusher.post(
                             "save-name",
                             {
@@ -939,7 +950,7 @@ class ConnectionManager {
                             console.error("saveTextures: /me returned non-ok status");
                             return false;
                         }
-                        this.authToken = (parsed as { authToken: string }).authToken;
+                        this.adoptRefreshedAuthToken((parsed as { authToken: string }).authToken);
                         // Retry with fresh token
                         await axiosToPusher.post(
                             "save-textures",
@@ -1003,7 +1014,7 @@ class ConnectionManager {
                             console.error("saveCompanionTexture: /me returned non-ok");
                             return false;
                         }
-                        this.authToken = (parsed as { authToken: string }).authToken;
+                        this.adoptRefreshedAuthToken((parsed as { authToken: string }).authToken);
                         await axiosToPusher.post(
                             "save-companion-texture",
                             {
