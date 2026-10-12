@@ -224,6 +224,7 @@ import { OutlineManager } from "./UI/OutlineManager";
 import { soundManager } from "./SoundManager";
 import { SharedVariablesManager } from "./SharedVariablesManager";
 import { EmbeddedWebsiteManager } from "./EmbeddedWebsiteManager";
+import { UsernameDomLayer } from "./UsernameDomLayer";
 import { DynamicAreaManager } from "./DynamicAreaManager";
 import { PlayerMovement } from "./PlayerMovement";
 import { PlayersPositionInterpolator } from "./PlayersPositionInterpolator";
@@ -392,6 +393,8 @@ export class GameScene extends DirtyScene {
     private jitsiDominantSpeaker = false;
     private jitsiParticipantsCount = 0;
     private cleanupDone = false;
+    /** The layer that holds the name pill of every player. */
+    public usernameDomLayer!: UsernameDomLayer;
     private playersEventDispatcher = new IframeEventDispatcher();
     private playersMovementEventDispatcher = new IframeEventDispatcher();
     private remotePlayersRepository = new RemotePlayersRepository();
@@ -626,11 +629,7 @@ export class GameScene extends DirtyScene {
         //initialize frame event of scripting API
         this.listenToIframeEvents();
 
-        this.load.image("iconTalk", "/resources/icons/icon_talking.png");
         this.load.image("iconSpeaker", "/resources/icons/icon_speaking.png");
-        this.load.image("iconMegaphone", "/resources/icons/icon_megaphone.png");
-        this.load.image("iconStatusIndicatorInside", "/resources/icons/icon_status_indicator_inside.png");
-        this.load.image("iconStatusIndicatorOutline", "/resources/icons/icon_status_indicator_outline.png");
 
         this.load.image("iconFocus", "/resources/icons/icon_focus.png");
         this.load.image("iconLink", "/resources/icons/icon_link.png");
@@ -920,6 +919,8 @@ export class GameScene extends DirtyScene {
 
         //permit to set bound collision
         this.physics.world.setBounds(0, 0, this.Map.widthInPixels, this.Map.heightInPixels);
+
+        this.usernameDomLayer = new UsernameDomLayer(this);
 
         this.embeddedWebsiteManager = new EmbeddedWebsiteManager(this);
 
@@ -1386,6 +1387,7 @@ export class GameScene extends DirtyScene {
         }
         this.connection?.closeConnection();
         this.outlineManager?.clear();
+        this.usernameDomLayer?.destroy();
         this.userInputManager?.destroy();
         this.isLiveStreamingUnsubscriber?.();
         this.pinchManager?.destroy();

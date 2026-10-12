@@ -21,6 +21,7 @@
     import { iframeListener } from "../Api/IframeListener";
     import { desktopApi } from "../Api/Desktop";
     import { canvasSize, coWebsiteManager, coWebsites, fullScreenCowebsite } from "../Stores/CoWebsiteStore";
+    import { gameSceneIsLoadedStore } from "../Stores/GameSceneStore";
     import { urlManager } from "../Url/UrlManager";
     import { FileListener } from "../Phaser/FileUpload/FileListener";
     import { isStructuredCloneSupported } from "../Utils/BrowserCompatibility";
@@ -254,7 +255,12 @@
         id="main-container"
         bind:this={gameContainer}
     >
-        <div id="game" class="relative {$fullScreenCowebsite ? 'hidden' : ''}" bind:this={gameDiv}>
+        <div
+            id="game"
+            class="relative {$fullScreenCowebsite ? 'hidden' : ''}"
+            class:game-scene-loaded={$gameSceneIsLoadedStore}
+            bind:this={gameDiv}
+        >
             <GameOverlay {game} />
         </div>
         {#if $coWebsites.length > 0}
