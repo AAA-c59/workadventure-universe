@@ -85,7 +85,12 @@ describe("BotWokaCatalogStore", () => {
         let resolveFirst: (response: Response) => void = () => {};
         const fetchSpy = vi
             .spyOn(globalThis, "fetch")
-            .mockImplementationOnce(() => new Promise<Response>((resolve) => (resolveFirst = resolve)))
+            .mockImplementationOnce(
+                () =>
+                    new Promise<Response>((resolve) => {
+                        resolveFirst = resolve;
+                    })
+            )
             .mockImplementationOnce(() => Promise.resolve(catalogResponse("room2")));
         const { ensureBotWokaCatalog, botWokaCatalogStore } = await loadModule();
 
