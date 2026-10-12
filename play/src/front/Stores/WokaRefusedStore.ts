@@ -24,3 +24,19 @@ export function showWokaRefused(kind: RefusedKind): void {
 export function isWokaRefusedShown(): boolean {
     return get(wokaRefusedStore) !== undefined;
 }
+
+/**
+ * What to ask the player when the page loads straight into a world that refuses what they wear (the answer of `/me`
+ * says so), as when a join is refused later: the "can't be worn here" popup, never the plain picker. A player whose
+ * device and account hold no WOKA yet has nothing to refuse: they pick their first one in the picker.
+ */
+export function refusedOnLoad(
+    response: { isCharacterTexturesValid?: boolean; isCompanionTextureValid?: boolean },
+    deviceTextureIds: string[] | null
+): RefusedKind | undefined {
+    if (response.isCharacterTexturesValid === false) {
+        return deviceTextureIds && deviceTextureIds.length > 0 ? "woka" : undefined;
+    }
+    if (response.isCompanionTextureValid === false) return "companion";
+    return undefined;
+}

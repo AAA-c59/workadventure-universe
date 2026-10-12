@@ -42,6 +42,7 @@ import { ABSOLUTE_PUSHER_URL } from "../Enum/ComputedConst";
 import { openChatRoom } from "../Chat/Utils";
 import LL from "../../i18n/i18n-svelte";
 import { errorScreenStore } from "../Stores/ErrorScreenStore";
+import { refusedOnLoad, showWokaRefused } from "../Stores/WokaRefusedStore";
 import { gameTokenToJoinWith } from "../external-modules/admin-api/orbitAccessToken";
 import { axiosToPusher, axiosWithRetry } from "./AxiosUtils";
 import { Room } from "./Room";
@@ -381,6 +382,9 @@ class ConnectionManager {
                         } else if (response.isCompanionTextureValid === false) {
                             nextScene = "selectCompanionScene";
                         }
+                        // A world that refuses what the player wears asks them first (the popup), as a refused join does
+                        const refused = refusedOnLoad(response, localUserStore.getCharacterTextures());
+                        if (refused) showWokaRefused(refused);
 
                         const chatRoomId = urlManager.getHashParameter("chatRoomId");
 
