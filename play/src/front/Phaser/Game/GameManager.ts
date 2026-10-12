@@ -180,6 +180,8 @@ export class GameManager {
 
     public gameSceneIsCreated(scene: GameScene) {
         this.currentGameSceneName = scene.scene.key;
+        // The page does not reload between maps: what is saved from here on belongs to this map's room.
+        connectionManager.setCurrentRoom(scene.room);
         menuIconVisiblilityStore.set(true);
     }
 
@@ -268,6 +270,14 @@ export class GameManager {
 
     public get currentStartedRoom() {
         return this.startRoom;
+    }
+
+    /**
+     * The room of the map the player is on now. `currentStartedRoom` is the page's first room: walking through an exit
+     * starts another map without reloading the page, so it does not follow the player.
+     */
+    public get currentMapRoom(): Room {
+        return this.tryGetCurrentGameScene()?.room ?? this.startRoom;
     }
 
     public setMatrixServerUrl(matrixServerUrl: string | undefined) {

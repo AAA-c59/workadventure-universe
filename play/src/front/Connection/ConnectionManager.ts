@@ -1000,6 +1000,15 @@ class ConnectionManager {
         return this._currentRoom;
     }
 
+    /**
+     * The room the player is in now. The page only picks its first room at load; moving to another map (an exit,
+     * WA.nav.goToRoom, the Explore list) does not reload the page, so each new map says where the player is. Saving a
+     * Woka, a name or a companion tells Orbit which room it was picked in.
+     */
+    setCurrentRoom(room: Room): void {
+        this._currentRoom = room;
+    }
+
     get klaxoonToolActivated(): boolean {
         return this._klaxoonToolActivated ?? false;
     }

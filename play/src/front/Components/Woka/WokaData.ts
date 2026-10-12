@@ -12,11 +12,11 @@ export const wokaBodyPartOrder = ["body", "eyes", "hair", "clothes", "hat", "acc
 let cached: { roomUrl: string; promise: Promise<WokaData> } | undefined;
 
 /**
- * The room's WOKA catalog (woka/list). The join screens share one request: the name screen and the camera screen
+ * The WOKA catalog of the room the player is in (woka/list). The join screens share one request: the name screen and the camera screen
  * show your WOKA, and the picker lists the catalog. A failed request is not kept, so Retry asks again.
  */
 export function fetchWokaData(): Promise<WokaData> {
-    const roomUrl = gameManager.currentStartedRoom.href;
+    const roomUrl = gameManager.currentMapRoom.href;
     if (cached && cached.roomUrl === roomUrl) {
         return cached.promise;
     }
