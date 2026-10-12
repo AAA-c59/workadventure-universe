@@ -814,6 +814,7 @@ export class MatrixChatRoom
         this.matrixRoom.off(RoomEvent.Name, this.handleRoomName);
         this.matrixRoom.off(RoomEvent.Redaction, this.handleRoomRedaction);
         this.matrixRoom.off(RoomStateEvent.Events, this.handleStateEvent);
+        this.matrixRoom.off(RoomEvent.MyMembership, this.handleMyMembership);
         this.matrixRoom.off(RoomStateEvent.NewMember, this.handleNewMember);
         get(this.members).forEach((member) => {
             member.destroy();
