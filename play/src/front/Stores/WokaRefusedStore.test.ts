@@ -18,7 +18,9 @@ describe("refusedOnLoad", () => {
     });
 
     it("asks nothing when the world shows both", () => {
-        expect(refusedOnLoad({ isCharacterTexturesValid: true, isCompanionTextureValid: true }, ["woka"])).toBeUndefined();
+        expect(
+            refusedOnLoad({ isCharacterTexturesValid: true, isCompanionTextureValid: true }, ["woka"])
+        ).toBeUndefined();
         expect(refusedOnLoad({}, null)).toBeUndefined();
     });
 });
