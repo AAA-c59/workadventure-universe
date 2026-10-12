@@ -243,7 +243,7 @@ test("BC-094 Walking onto a Stage goes live to the Audience; leaving stops it", 
     const bob = await newPlayer(browser, testInfo, url, "Bob");
     await wa(page, () => WA.player.teleport(160, 160));
     await wa(bob, () => WA.player.teleport(272, 272));
-    const aliceTile = bob.getByText("Alice", { exact: true });
+    const aliceTile = bob.locator("#cameras-container").getByText("Alice", { exact: true });
     await expect(aliceTile).toHaveCount(0);
     await wa(page, () => WA.player.teleport(48, 48));
     await expect(aliceTile.first()).toBeVisible({ timeout: 30_000 });
