@@ -55,7 +55,7 @@ describe("fetchWokaMine", () => {
     it("asks for the room the player is in, with the token", async () => {
         fetchMock.mockResolvedValue({ ok: true, json: () => Promise.resolve(mine) });
         const result = await fetchWokaMine();
-        expect(result?.current.textures[0].id).toBe("teal");
+        expect(result?.current?.textures[0].id).toBe("teal");
         expect(result?.recent).toHaveLength(1);
         expect(fetchMock).toHaveBeenCalledWith(
             "http://pusher.test/woka/mine?roomUrl=http%3A%2F%2Fplay.test%2F%40%2Fu%2Fw%2Fr",
