@@ -227,10 +227,10 @@ test.describe('Meeting actions test', () => {
         
         
         // click on the megaphone button to start the streaming session
-        await expect(page2.getByText('Admin1', { exact: true })).toBeVisible({ timeout: 15_000 });
-        await expect(userAlice.getByText('Admin1', { exact: true })).toBeVisible({ timeout: 15_000 });
-        await expect(userBob.getByText('Admin1', { exact: true })).toBeVisible({ timeout: 15_000 });
-        await expect(userEve.getByText('Admin1', { exact: true })).toBeVisible({ timeout: 15_000 });
+        await expect(page2.locator('#cameras-container').getByText('Admin1', { exact: true })).toBeVisible({ timeout: 15_000 });
+        await expect(userAlice.locator('#cameras-container').getByText('Admin1', { exact: true })).toBeVisible({ timeout: 15_000 });
+        await expect(userBob.locator('#cameras-container').getByText('Admin1', { exact: true })).toBeVisible({ timeout: 15_000 });
+        await expect(userEve.locator('#cameras-container').getByText('Admin1', { exact: true })).toBeVisible({ timeout: 15_000 });
         
         await expectLivekitRoomsCountToBe(userAlice, 1);
         await expectLivekitRoomsCountToBe(userBob, 1);
@@ -250,10 +250,10 @@ test.describe('Meeting actions test', () => {
         await Menu.toggleMegaphoneButton(page);
         await Menu.startLiveBroadcast(page);
 
-    await expect(page2.getByText('Admin1', { exact: true })).toBeVisible({ timeout: 15_000 });
-    await expect(userAlice.getByText('Admin1', { exact: true })).toBeVisible({ timeout: 15_000 });
-    await expect(userBob.getByText('Admin1', { exact: true })).toBeVisible({ timeout: 15_000 });
-    await expect(userEve.getByText('Admin1', { exact: true })).toBeVisible({ timeout: 15_000 });
+    await expect(page2.locator('#cameras-container').getByText('Admin1', { exact: true })).toBeVisible({ timeout: 15_000 });
+    await expect(userAlice.locator('#cameras-container').getByText('Admin1', { exact: true })).toBeVisible({ timeout: 15_000 });
+    await expect(userBob.locator('#cameras-container').getByText('Admin1', { exact: true })).toBeVisible({ timeout: 15_000 });
+    await expect(userEve.locator('#cameras-container').getByText('Admin1', { exact: true })).toBeVisible({ timeout: 15_000 });
 
 
     await expectLivekitRoomsCountToBe(userAlice, 1);
