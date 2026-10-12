@@ -39,11 +39,13 @@ export interface InstallEnvironment {
     navigatorStandalone: boolean;
     /** Brave hides itself in the user agent, but has `navigator.brave`. */
     brave?: boolean;
+    /** The game runs inside Universe's own native app (a Capacitor web view), which is already an app. */
+    nativeShell?: boolean;
 }
 
-/** Whether the game already runs as an installed app. */
+/** Whether the game already runs as an installed app (a home screen app, or the native Universe app). */
 export function isInstalledApp(env: InstallEnvironment): boolean {
-    return env.displayModeInstalled || env.navigatorStandalone;
+    return env.displayModeInstalled || env.navigatorStandalone || env.nativeShell === true;
 }
 
 // Browsers that wrap a page in their own window (Instagram, Facebook, WhatsApp, TikTok, Snapchat, ...).
@@ -85,6 +87,10 @@ export function currentInstallEnvironment(): InstallEnvironment {
             matches("(display-mode: standalone)") || matches("(display-mode: window-controls-overlay)"),
         navigatorStandalone: (navigator as Navigator & { standalone?: boolean }).standalone === true,
         brave: (navigator as Navigator & { brave?: unknown }).brave !== undefined,
+        nativeShell:
+            (
+                window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }
+            ).Capacitor?.isNativePlatform?.() === true,
     };
 }
 

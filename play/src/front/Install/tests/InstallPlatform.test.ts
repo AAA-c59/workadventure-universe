@@ -121,6 +121,13 @@ describe("browserMenuGuideFor", () => {
 });
 
 describe("isInstalledApp", () => {
+    it("is true inside the native Universe app, whose iOS web view has no Safari in its user agent", () => {
+        const webView =
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148";
+        expect(isInstalledApp(env(webView, { nativeShell: true }))).toBe(true);
+        expect(isInstalledApp(env(webView))).toBe(false);
+    });
+
     it("is true in a standalone window and in a home screen app", () => {
         expect(isInstalledApp(env(MAC_CHROME, { displayModeInstalled: true }))).toBe(true);
         expect(isInstalledApp(env(IPHONE_SAFARI, { navigatorStandalone: true }))).toBe(true);

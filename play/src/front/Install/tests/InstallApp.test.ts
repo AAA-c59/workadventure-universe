@@ -116,6 +116,16 @@ describe("InstallApp", () => {
             expect(get(app.canInstallStore)).toBe(false);
         });
 
+        it("is not possible, and never shows, inside the native Universe app", () => {
+            const webView =
+                "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148";
+            const { app, storage } = setup({ env: env(webView, { nativeShell: true }) });
+            expect(get(app.canInstallStore)).toBe(false);
+            app.noteConversationEnded();
+            expect(get(app.cardVisibleStore)).toBe(false);
+            expect(storage.seen).toBe(false);
+        });
+
         it("is not possible, and never shows, inside the installed app", () => {
             const { app, storage } = setup({ env: env(IPHONE_SAFARI, { navigatorStandalone: true }) });
             expect(get(app.canInstallStore)).toBe(false);
