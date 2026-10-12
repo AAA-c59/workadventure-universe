@@ -80,4 +80,24 @@ describe("BotWokaCatalogStore", () => {
         expect(fetchSpy).toHaveBeenCalledTimes(2);
         expect(get(botWokaCatalogStore)).not.toBeNull();
     });
+
+    it("drops a catalogue that arrives after the player moved to another world", async () => {
+        let resolveFirst: (response: Response) => void = () => {};
+        const fetchSpy = vi
+            .spyOn(globalThis, "fetch")
+            .mockImplementationOnce(() => new Promise<Response>((resolve) => (resolveFirst = resolve)))
+            .mockImplementationOnce(() => Promise.resolve(catalogResponse("room2")));
+        const { ensureBotWokaCatalog, botWokaCatalogStore } = await loadModule();
+
+        const pending = ensureBotWokaCatalog();
+        mocks.room = { href: "https://play.test/_/universe/world/room2" };
+        resolveFirst(catalogResponse("room1"));
+        await pending;
+
+        expect(get(botWokaCatalogStore)).toBeNull();
+
+        await ensureBotWokaCatalog();
+        expect(fetchSpy).toHaveBeenCalledTimes(2);
+        expect(get(botWokaCatalogStore)?.woka.collections[0].name).toBe("room2");
+    });
 });

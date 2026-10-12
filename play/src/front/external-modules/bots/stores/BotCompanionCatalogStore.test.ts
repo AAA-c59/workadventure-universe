@@ -67,4 +67,24 @@ describe("BotCompanionCatalogStore", () => {
         );
         expect(get(botCompanionCatalogStore)?.[0].name).toBe("room2");
     });
+
+    it("drops a list that arrives after the player moved to another world", async () => {
+        let resolveFirst: (response: Response) => void = () => {};
+        const fetchSpy = vi
+            .spyOn(globalThis, "fetch")
+            .mockImplementationOnce(() => new Promise<Response>((resolve) => (resolveFirst = resolve)))
+            .mockImplementationOnce(() => Promise.resolve(catalogResponse("room2")));
+        const { ensureBotCompanionCatalog, botCompanionCatalogStore } = await loadModule();
+
+        const pending = ensureBotCompanionCatalog();
+        mocks.room = { href: "https://play.test/_/universe/world/room2" };
+        resolveFirst(catalogResponse("room1"));
+        await pending;
+
+        expect(get(botCompanionCatalogStore)).toBeNull();
+
+        await ensureBotCompanionCatalog();
+        expect(fetchSpy).toHaveBeenCalledTimes(2);
+        expect(get(botCompanionCatalogStore)?.[0].name).toBe("room2");
+    });
 });
