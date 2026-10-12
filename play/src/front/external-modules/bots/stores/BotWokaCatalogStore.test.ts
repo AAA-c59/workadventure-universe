@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("../../../Phaser/Game/GameManager", () => ({
     gameManager: {
-        get currentStartedRoom() {
+        get currentMapRoom() {
             return mocks.room;
         },
     },
