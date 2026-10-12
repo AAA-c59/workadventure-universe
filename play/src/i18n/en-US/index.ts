@@ -26,6 +26,7 @@ import form from "./form";
 import messageScreen from "./messageScreen";
 import locate from "./locate";
 import broadcast from "./broadcast";
+import install from "./install";
 
 const en_US: BaseTranslation = {
     area,
@@ -55,6 +56,7 @@ const en_US: BaseTranslation = {
     messageScreen,
     locate,
     broadcast,
+    install,
 };
 
 export default en_US;

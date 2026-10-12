@@ -1,0 +1,67 @@
+import type { RequiredMetaTagsData } from "@workadventure/messages";
+
+/** The query parameter of the app's start address that carries the room it was installed from. */
+export const INSTALL_ROOM_PARAMETER = "installRoom";
+
+/**
+ * The room a page shows, as a path ("/@/universe/world/room"), or undefined for the start page without one.
+ * Only the path is kept: a query or a hash can hold a login token and must never end up in a manifest.
+ * The installed app's own start page ("/?installRoom=<path>") hands its room on, so the manifest the browser
+ * re-reads for it stays the same.
+ */
+export function roomPathOfPage(pageUrl: string): string | undefined {
+    let url: URL;
+    try {
+        url = new URL(pageUrl);
+    } catch {
+        return undefined;
+    }
+    const path = url.pathname === "/" ? url.searchParams.get(INSTALL_ROOM_PARAMETER) : url.pathname;
+    if (path === null || path === "/" || !path.startsWith("/") || path.startsWith("//")) {
+        return undefined;
+    }
+    return path;
+}
+
+/**
+ * The web app manifest of Universe.
+ *
+ * One app for every room: the id is fixed and the name is "Universe", never the room's title. Opening it starts at
+ * "/", which opens the last room; the room it was installed from rides along in the start address so the very first
+ * launch, with empty storage (an iPhone keeps its home screen app's storage apart from Safari's), lands there too.
+ */
+export function buildWebManifest(metaTagsData: RequiredMetaTagsData, pageUrl: string) {
+    const roomPath = roomPathOfPage(pageUrl);
+    return {
+        id: "/",
+        name: metaTagsData.appName,
+        short_name: metaTagsData.shortAppName,
+        icons: metaTagsData.manifestIcons,
+        start_url: roomPath ? `/?${INSTALL_ROOM_PARAMETER}=${encodeURIComponent(roomPath)}` : "/",
+        background_color: metaTagsData.themeColor,
+        // Standalone: a window of its own, with no browser bar. Any orientation: a phone turns sideways too.
+        display: "standalone",
+        scope: "/",
+        lang: "en",
+        theme_color: metaTagsData.themeColor,
+        // Opening a Universe link while the app is open brings that window forward and goes to the link.
+        launch_handler: { client_mode: ["navigate-existing", "auto"] },
+        shortcuts: [
+            {
+                name: metaTagsData.appName,
+                short_name: metaTagsData.shortAppName,
+                description: metaTagsData.description,
+                url: "/",
+                icons: [
+                    {
+                        src: "/static/images/favicons/android-icon-192x192.png",
+                        sizes: "192x192",
+                        type: "image/png",
+                    },
+                ],
+            },
+        ],
+        description: metaTagsData.description,
+        screenshots: [],
+    };
+}

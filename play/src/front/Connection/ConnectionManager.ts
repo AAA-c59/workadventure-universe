@@ -16,6 +16,7 @@ import { analyticsClient } from "../Administration/AnalyticsClient";
 import { userIsConnected, warningBannerStore } from "../Stores/MenuStore";
 import { loginSceneVisibleIframeStore } from "../Stores/LoginSceneStore";
 import { _ServiceWorker } from "../Network/ServiceWorker";
+import { INSTALL_ROOM_PARAMETER, installRoomPath } from "../Install/InstallRoom";
 import { GameConnexionTypes, urlManager } from "../Url/UrlManager";
 import {
     CARDS_ENABLED,
@@ -304,17 +305,24 @@ class ConnectionManager {
             let roomPath: string;
             if (this.connexionType === GameConnexionTypes.empty) {
                 roomPath = localUserStore.getLastRoomUrl();
+                let lastRoomKnown = localUserStore.hasLastRoomUrl();
                 //get last room path from cache api
                 try {
                     const lastRoomUrl = await localUserStore.getLastRoomUrlCacheApi();
                     if (lastRoomUrl != undefined) {
                         roomPath = lastRoomUrl;
+                        lastRoomKnown = true;
                     }
                 } catch (err) {
                     console.error(err);
                     if (err instanceof Error) {
                         console.error(err.stack);
                     }
+                }
+                // The installed app's first launch, with empty storage: the room it was installed from.
+                const installRoom = installRoomPath(urlParams.get(INSTALL_ROOM_PARAMETER));
+                if (!lastRoomKnown && installRoom !== undefined) {
+                    roomPath = window.location.protocol + "//" + window.location.host + installRoom;
                 }
             } else {
                 const query = urlParams.toString();

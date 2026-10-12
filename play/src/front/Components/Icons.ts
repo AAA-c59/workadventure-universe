@@ -183,3 +183,4 @@ export { default as IconTrendingUp } from "~icons/tabler/trending-up";
 export { default as IconWifiOff } from "~icons/tabler/wifi-off";
 export { default as IconHistory } from "~icons/tabler/history";
 export { default as IconArrowRight } from "~icons/tabler/arrow-right";
+export { default as IconShare2 } from "~icons/tabler/share-2";

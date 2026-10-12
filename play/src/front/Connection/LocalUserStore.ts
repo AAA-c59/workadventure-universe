@@ -64,6 +64,8 @@ const editHintSeenKey = "editHintSeen";
 const recentEditObjectsKey = "recentEditObjects";
 const bubbleSound = "bubbleSound";
 const knownMediaDevices = "knownMediaDevices";
+const installCardSeenKey = "installCardSeen";
+const installReportedKey = "installReported";
 const ignoredNewMediaDevices = "ignoredNewMediaDevices";
 
 const INITIAL_MAP_EDITOR_SIDEBAR_WIDTH = 448;
@@ -283,6 +285,26 @@ class LocalUserStore {
                 console.error("Could not store last room url in Browser cache. Are you using private browser mode?", e);
             }
         }
+    }
+
+    /** The install card was shown (or dismissed) on this device: it never shows again. */
+    isInstallCardSeen(): boolean {
+        return localStorage.getItem(installCardSeenKey) === "true";
+    }
+    markInstallCardSeen(): void {
+        localStorage.setItem(installCardSeenKey, "true");
+    }
+    /** The install of the app was already counted on this device. */
+    isInstallReported(): boolean {
+        return localStorage.getItem(installReportedKey) === "true";
+    }
+    markInstallReported(): void {
+        localStorage.setItem(installReportedKey, "true");
+    }
+
+    /** Whether a last room was ever saved here (otherwise getLastRoomUrl gives the start page). */
+    hasLastRoomUrl(): boolean {
+        return localStorage.getItem(lastRoomUrl) !== null;
     }
 
     getLastRoomUrl(): string {

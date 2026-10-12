@@ -11,6 +11,7 @@ import { installViewportResync } from "./front/Utils/ViewportResync";
 import { analyticsClient } from "./front/Administration/AnalyticsClient";
 import { startStoreFreezeWatchdog } from "./front/Utils/StoreFreezeWatchdog";
 import { browserWatchdogStorage } from "./front/Connection/ReconnectWatchdog";
+import { startInstallApp } from "./front/Install/InstallWiring";
 
 // Initialize E2E hooks
 declare global {
@@ -56,6 +57,9 @@ startStoreFreezeWatchdog({
         analyticsClient.uiFrozen(properties);
     },
 });
+
+// The browser sends its install event once, early: listen before anything else loads.
+startInstallApp();
 
 const app = new App({
     target: HtmlUtils.getElementByIdOrFail("app"),
