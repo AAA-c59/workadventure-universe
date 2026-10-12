@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../../../Phaser/Game/GameManager", () => ({
-    gameManager: { currentStartedRoom: { href: "http://play.test/@/u/w/r" } },
+    gameManager: { currentMapRoom: { href: "http://play.test/@/u/w/r" } },
 }));
 vi.mock("../../../Connection/LocalUserStore", () => ({
     localUserStore: { isLogged: mocks.isLogged, getAuthToken: () => "token" },

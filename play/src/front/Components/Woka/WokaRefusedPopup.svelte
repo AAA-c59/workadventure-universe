@@ -22,7 +22,7 @@
     export let kind: RefusedKind;
 
     const isCompanion = kind === "companion";
-    const placeName = gameManager.currentStartedRoom?.roomName;
+    const placeName = gameManager.currentMapRoom?.roomName;
 
     let refusal: WokaRefusal | undefined;
     /** The companion you have, when the server drew it for us (its picture, as the pusher serves it) */
@@ -151,7 +151,7 @@
         else selectCharacterSceneVisibleStore.set(true);
     }
 
-    const bgColor = gameManager.currentStartedRoom?.backgroundColor ?? "#000000";
+    const bgColor = gameManager.currentMapRoom?.backgroundColor ?? "#000000";
 </script>
 
 <div class="refused-backdrop fixed inset-0" style="background-color: {bgColor};" />

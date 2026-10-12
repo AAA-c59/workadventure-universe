@@ -80,7 +80,7 @@ export function texturesByPart(textureIds: string[] | null, wokaData: WokaData):
 export async function fetchWokaMine(): Promise<WokaMine | undefined> {
     if (!localUserStore.isLogged() || !hasCapability("api/woka/mine")) return undefined;
     try {
-        const roomUrl = gameManager.currentStartedRoom.href;
+        const roomUrl = gameManager.currentMapRoom.href;
         const response = await fetch(`${ABSOLUTE_PUSHER_URL}woka/mine?roomUrl=${encodeURIComponent(roomUrl)}`, {
             headers: {
                 Authorization: localUserStore.getAuthToken() || "",

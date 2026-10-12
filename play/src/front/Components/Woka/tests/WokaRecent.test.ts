@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({ fetchWokaMine: vi.fn() }));
 
 vi.mock("../../../Phaser/Game/GameManager", () => ({
     gameManager: {
-        currentStartedRoom: { href: "http://play.test/@/u/w/r", backgroundColor: "#000000" },
+        currentMapRoom: { href: "http://play.test/@/u/w/r", backgroundColor: "#000000" },
         getCharacterTextureIds: () => ["teal"],
     },
 }));

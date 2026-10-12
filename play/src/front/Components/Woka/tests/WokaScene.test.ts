@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("../../../Phaser/Game/GameManager", () => ({
     gameManager: {
-        currentStartedRoom: { href: "http://play.test/@/u/w/r", backgroundColor: "#000000" },
+        currentMapRoom: { href: "http://play.test/@/u/w/r", backgroundColor: "#000000" },
         canResumeGame: true,
         getCharacterTextureIds: () => ["teal"],
         setCharacterTextureIds: mocks.setCharacterTextureIds,

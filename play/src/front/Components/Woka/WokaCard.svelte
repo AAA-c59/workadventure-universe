@@ -44,7 +44,7 @@
         direction = turnOrder[turn];
     }
 
-    const bgColor = gameManager.currentStartedRoom.backgroundColor ?? "#000000";
+    const bgColor = gameManager.currentMapRoom.backgroundColor ?? "#000000";
     // Whole-ish multiples of the 32px frame so the pixels stay crisp
     $: previewSize = $joinDesktopStore ? 144 : 80;
 
