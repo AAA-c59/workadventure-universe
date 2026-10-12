@@ -534,12 +534,13 @@ export abstract class Character extends Container implements OutlineableInterfac
         duration = 10000,
         callback = () => this.destroyText(id),
         createStackAnimation = true,
-        type: "warning" | "message" = "message"
+        type: "warning" | "message" = "message",
+        icon?: "sound"
     ) {
         if (this.texts.has(id)) {
             this.destroyText(id);
         }
-        this.textsToBuild.set(id, { text, duration, callback, type });
+        this.textsToBuild.set(id, { text, duration, callback, type, icon });
 
         // If there is already one text created, we don't need to create a stack animation
         if (this.texts.size == 1 && createStackAnimation) {
@@ -554,7 +555,8 @@ export abstract class Character extends Container implements OutlineableInterfac
             -1,
             -30 + this.texts.size * 2,
             callback,
-            type
+            type,
+            icon
         );
         this.add(speechDomElement);
         this.texts.set(id, speechDomElement);
@@ -648,8 +650,8 @@ export abstract class Character extends Container implements OutlineableInterfac
         // Recreate all texts in the correct order (from the biggest length to the smallest)
         Array.from(this.textsToBuild.entries())
             .sort((a, b) => a[1].text.length - b[1].text.length)
-            .forEach(([id, { text, duration, callback }]) => {
-                this.playText(id, text, duration, callback, false);
+            .forEach(([id, { text, duration, callback, type, icon }]) => {
+                this.playText(id, text, duration, callback, false, type, icon);
             });
     }
 

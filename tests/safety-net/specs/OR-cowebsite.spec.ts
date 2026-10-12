@@ -14,8 +14,8 @@ import {
     walkUntil,
 } from "../lib/or";
 
-const OPEN_WEBSITE_DESKTOP = "[SPACE] to open web site 👀";
-const OPEN_WEBSITE_PHONE = "👆 to open web site 👀";
+const OPEN_WEBSITE_DESKTOP = "Press Space to open the website";
+const OPEN_WEBSITE_PHONE = "Tap to open the website";
 
 async function walkToTopRow(page: Page): Promise<void> {
     await walkUntil(page, "ArrowUp", () =>
@@ -271,7 +271,7 @@ test("OR-085 Open-tab area on action: popup with Open Tab; SPACE and the button 
     ]);
     await join(page, url, "Alice");
 
-    const text = isPhone(testInfo) ? "👆 to open web new tab 👀" : "[SPACE] to open new tab 👀";
+    const text = isPhone(testInfo) ? "Tap to open a new tab" : "Press Space to open a new tab";
     const message = popups(page).getByText(text);
     const button = popups(page).getByRole("button", { name: "Open Tab" });
 
@@ -368,7 +368,7 @@ async function expectJitsiFlow(
     leave: () => Promise<void>,
     enter: () => Promise<void>
 ): Promise<void> {
-    const message = popups(page).getByText(isPhoneProject ? "👆 to enter Jitsi 👀" : "[SPACE] to enter Jitsi 👀");
+    const message = popups(page).getByText(isPhoneProject ? "Tap to enter Jitsi" : "Press Space to enter Jitsi");
     await enter();
     await expect(message).toBeVisible();
     await popups(page).getByRole("button", { name: "Enter Jitsi" }).click();

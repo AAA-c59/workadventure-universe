@@ -440,7 +440,7 @@ export class MatrixChatConnection implements ChatConnectionInterface {
     /**
      * A chat's type (direct or group) is decided when it is created, but the account's list of direct chats can arrive
      * after the chat itself. Chats that turn out to be direct are made again, so they show the person and not the
-     * chat account's name (#834).
+     * chat account's name (#834). Chats inside folders are made again in the same folder (#853).
      */
     private refreshRoomTypes(): void {
         for (const room of Array.from(this.roomList.values())) {
@@ -450,6 +450,33 @@ export class MatrixChatConnection implements ChatConnectionInterface {
             this.roomList.delete(room.id);
             this.createAndAddNewRootRoom(matrixRoom);
         }
+
+        for (const folder of Array.from(this.roomFolders.values())) {
+            this.refreshRoomTypesInFolder(folder);
+        }
+    }
+
+    private refreshRoomTypesInFolder(folder: MatrixRoomFolder): void {
+        for (const room of Array.from(folder.roomList.values())) {
+            if (!room.hasOutdatedType()) continue;
+            const matrixRoom = this.client?.getRoom(room.id);
+            if (!matrixRoom) continue;
+            // A folder's room list does not destroy chats it drops, unlike the main list
+            room.destroy();
+            const newRoom = this.createChatRoom(matrixRoom);
+            folder.roomList.set(newRoom.id, newRoom);
+            if (get(selectedRoomStore)?.id === newRoom.id) {
+                selectedRoomStore.set(newRoom);
+            }
+        }
+
+        for (const subFolder of Array.from(folder.folderList.values())) {
+            this.refreshRoomTypesInFolder(subFolder);
+        }
+    }
+
+    private createChatRoom(room: Room): MatrixChatRoom {
+        return new MatrixChatRoom(room);
     }
 
     private onRoomNameEvent(room: Room): void {

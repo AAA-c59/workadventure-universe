@@ -124,7 +124,7 @@ test("OR-091 Muted map sounds disable the music button; a sound that fails shows
     await expect(visible(page, "music-button")).toHaveAttribute("data-state", "forbidden");
 });
 
-test("OR-091 Blocked autoplay: the WOKA shows the 'Audio is not allowed' bubble", async ({ page }, testInfo) => {
+test("OR-091 Blocked autoplay: the map music hint is above the WOKA on a computer, a pill at the top on a phone", async ({ page }, testInfo) => {
     await page.addInitScript(() => {
         HTMLMediaElement.prototype.play = function () {
             return Promise.reject(new DOMException("blocked", "NotAllowedError"));
@@ -132,8 +132,12 @@ test("OR-091 Blocked autoplay: the WOKA shows the 'Audio is not allowed' bubble"
     });
     await join(page, tiled(testInfo, "tests/E2E/audio.json"), "Alice");
     await teleport(page, 240, 144);
-    await expect(page.locator("span.characterTriggerAction")).toContainText("Audio is not allowed. Press");
-    await expect(page.locator("span.characterTriggerAction")).toContainText("or click here to play it!");
+    if (isPhone(testInfo)) {
+        await expect(page.getByTestId("sound-hint")).toContainText("Tap anywhere to play the map music");
+        await expect(page.locator("span.characterTriggerAction")).toHaveCount(0);
+    } else {
+        await expect(page.locator("span.characterTriggerAction")).toContainText("Press Space to play the map music");
+    }
 });
 
 test("OR-092 @local Exits: exit1's exit loads exit2, whose exit brings you back to exit1 at from_exit2", async ({
