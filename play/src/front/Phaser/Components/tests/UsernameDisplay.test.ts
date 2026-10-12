@@ -203,7 +203,11 @@ describe("UsernameDisplay", () => {
 
         beforeEach(() => {
             animate.mockClear();
-            Object.defineProperty(HTMLElement.prototype, "animate", { value: animate, configurable: true, writable: true });
+            Object.defineProperty(HTMLElement.prototype, "animate", {
+                value: animate,
+                configurable: true,
+                writable: true,
+            });
         });
 
         afterEach(() => {
