@@ -21,7 +21,7 @@ export interface InstallEnvironment {
     userAgent: string;
     platform: string;
     maxTouchPoints: number;
-    /** `(display-mode: standalone)` and its kin: the page runs as an installed app. */
+    /** `(display-mode: standalone)` (or window-controls-overlay): the page runs as an installed app. Not fullscreen: F11 in a browser tab matches that too. */
     displayModeInstalled: boolean;
     /** Safari's own flag for a home screen app. */
     navigatorStandalone: boolean;
@@ -68,9 +68,7 @@ export function currentInstallEnvironment(): InstallEnvironment {
         platform: navigator.platform,
         maxTouchPoints: navigator.maxTouchPoints,
         displayModeInstalled:
-            matches("(display-mode: standalone)") ||
-            matches("(display-mode: fullscreen)") ||
-            matches("(display-mode: window-controls-overlay)"),
+            matches("(display-mode: standalone)") || matches("(display-mode: window-controls-overlay)"),
         navigatorStandalone: (navigator as Navigator & { standalone?: boolean }).standalone === true,
     };
 }
