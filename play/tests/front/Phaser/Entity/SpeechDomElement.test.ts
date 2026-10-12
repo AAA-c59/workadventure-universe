@@ -5,7 +5,7 @@ import type { SpeechDomElement as SpeechDomElementType } from "../../../../src/f
 vi.mock("../../../../src/i18n/i18n-svelte", () => ({
     default: {
         subscribe: (callback: (value: unknown) => void) => {
-            callback({ trigger: { spaceKeyboard: () => "[SPACE]" } });
+            callback({ trigger: { spaceKeyboard: () => "[SPACE]", keySpace: () => "Space", keyTap: () => "Tap" } });
             return () => {};
         },
     },
@@ -48,8 +48,39 @@ describe.each([false, true])("SpeechDomElement (async Markdown: %s)", (asyncMark
         const node = await render("**Welcome** [help](https://example.com) [SPACE]");
         expect(node.querySelector("strong")?.textContent).toBe("Welcome");
         expect(node.querySelector("a")?.href).toBe("https://example.com/");
-        expect(node.querySelector("svg text")?.textContent).toBe("SPACE");
-        expect(node.querySelector("svg text")?.getAttribute("dominant-baseline")).toBe("middle");
+        expect(node.querySelector("kbd.u-hint-key")?.textContent).toBe("Space");
+    });
+
+    it("shows every [SPACE] as the key chip, and Tap on a touch screen", async () => {
+        vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(hover: none) and (pointer: coarse)" }));
+        try {
+            const node = await render("[SPACE] to open the door, [SPACE] again");
+            const keys = [...node.querySelectorAll("kbd.u-hint-key")].map((key) => key.textContent);
+            expect(keys).toEqual(["Tap", "Tap"]);
+            expect(node.textContent?.trim()).toBe("Tap to open the door, Tap again");
+        } finally {
+            vi.unstubAllGlobals();
+            vi.stubGlobal("Phaser", { GameObjects: { DOMElement } });
+        }
+    });
+
+    it("is the hint pill, with the sound icon when asked", async () => {
+        const bubble = new SpeechDomElement(
+            "sound",
+            "Press [SPACE] to play",
+            {} as Phaser.Scene,
+            -1,
+            -50,
+            undefined,
+            "message",
+            "sound"
+        );
+        await Promise.resolve();
+        const node = (bubble as unknown as DOMElement).node;
+        expect(node.classList.contains("u-hint")).toBe(true);
+        expect(node.querySelectorAll("svg.u-hint-icon path")).toHaveLength(3);
+        expect(node.textContent?.trim()).toBe("Press Space to play");
+        expect((await render("Plain hint")).querySelector("svg")).toBeNull();
     });
 
     it("removes executable URLs produced by Markdown", async () => {
