@@ -17,6 +17,7 @@ export class WaScaleManager {
     private game!: Game;
     private actualZoom = 1;
     private _saveZoom = 1;
+    private zoomCamera?: Phaser.Cameras.Scene2D.Camera;
 
     private focusTarget?: WaScaleManagerFocusTarget;
 
@@ -27,11 +28,28 @@ export class WaScaleManager {
     public setGame(game: Game): void {
         this.scaleManager = game.scale;
         this.game = game;
+        this.zoomCamera = undefined;
     }
 
     public applyNewSize(camera?: Phaser.Cameras.Scene2D.Camera) {
         if (this.scaleManager === undefined) {
             return;
+        }
+        // Resizes and focus refreshes do not pass a camera. Reuse the one whose zoom we manage,
+        // but only while it still belongs to an active scene, leaving other scene cameras alone.
+        if (camera) {
+            this.zoomCamera = camera;
+        } else if (this.zoomCamera) {
+            const zoomCamera = this.zoomCamera;
+            if (
+                this.game.scene
+                    .getScenes(true)
+                    .some((scene) => scene === zoomCamera.scene && scene.cameras.cameras.includes(zoomCamera))
+            ) {
+                camera = zoomCamera;
+            } else {
+                this.zoomCamera = undefined;
+            }
         }
         const { width, height } = coWebsiteManager.getGameSize();
         const devicePixelRatio = window.devicePixelRatio ?? 1;
