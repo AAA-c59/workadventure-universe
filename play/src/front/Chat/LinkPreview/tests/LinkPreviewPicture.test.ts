@@ -75,8 +75,8 @@ describe("a picture in a chat message", () => {
         return card;
     }
 
-    function click(card: HTMLElement): MouseEvent {
-        const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+    function click(card: HTMLElement, init: MouseEventInit = {}): MouseEvent {
+        const event = new MouseEvent("click", { bubbles: true, cancelable: true, ...init });
         card.dispatchEvent(event);
         return event;
     }
@@ -91,6 +91,24 @@ describe("a picture in a chat message", () => {
         expect(event.defaultPrevented).toBe(true);
         const viewer = document.querySelector("[data-lightbox]");
         expect(viewer?.querySelector("img")?.getAttribute("src")).toBe(GIF);
+    });
+
+    it.each([
+        ["Ctrl", { ctrlKey: true }],
+        ["Cmd", { metaKey: true }],
+        ["Shift", { shiftKey: true }],
+        ["Alt", { altKey: true }],
+        ["a non-primary button", { button: 1 }],
+    ])("follows the link into a new tab on %s-click, without opening the viewer", async (_name, init) => {
+        const card = await show(GIF);
+        expect(card.getAttribute("target")).toBe("_blank");
+
+        const event = click(card, init);
+        await tick();
+
+        expect(event.defaultPrevented).toBe(false);
+        expect(document.querySelector("[data-lightbox]")).toBeNull();
+        expect(get(lightboxOpenStore)).toBe(false);
     });
 
     it("closes the viewer with Escape", async () => {
