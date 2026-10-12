@@ -20,6 +20,11 @@ function currentRoomUrl(): string | null {
     return gameManager?.currentMapRoom?.href || window.location.href || null;
 }
 
+/** A moving player starts no new request, so also check that they are still in the room this answer is for. */
+function isStillWanted(roomUrl: string): boolean {
+    return inFlight?.roomUrl === roomUrl && currentRoomUrl() === roomUrl;
+}
+
 /**
  * Load the catalogue for the current room unless it is already loaded or loading.
  */
@@ -46,9 +51,9 @@ export function ensureBotWokaCatalog(): Promise<void> {
                     credentials: "include",
                 }
             );
-            if (!response.ok || inFlight?.roomUrl !== roomUrl) return;
+            if (!response.ok || !isStillWanted(roomUrl)) return;
             const data = (await response.json()) as WokaData;
-            if (inFlight?.roomUrl !== roomUrl) return;
+            if (!isStillWanted(roomUrl)) return;
             loadedRoomUrl = roomUrl;
             catalogStore.set(data);
         } catch (err) {
