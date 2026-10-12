@@ -1129,6 +1129,16 @@ div.emoji-picker {
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+/* A second line under a row's label: what the row does, in a quiet tone. */
+.u-menu-hint {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.6875rem;
+    line-height: 1rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.55);
+}
 .u-menu-go {
     flex: none;
     margin-inline-start: auto;
