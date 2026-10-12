@@ -53,6 +53,17 @@ import { watchConnectAttempt } from "./ConnectAttemptWatch";
 import { HtmlUtils } from "./../WebRtc/HtmlUtils";
 import { hasCapability } from "./Capabilities";
 
+/** How a save of the WOKA or the companion ended: kept, refused for this place by the admin, or not saved at all. */
+export type SaveResult = "saved" | "notAllowed" | "failed";
+
+function saveFailure(err: unknown): SaveResult {
+    const refused =
+        isAxiosError(err) &&
+        err.response?.status === 422 &&
+        (err.response.data as { code?: unknown } | undefined)?.code === "WOKA_NOT_ALLOWED";
+    return refused ? "notAllowed" : "failed";
+}
+
 export interface ConnectOptions {
     /** Whether whoever asked no longer wants this connection (the map was closed): no more retries, no screen changes. */
     cancelled?: () => boolean;
@@ -919,131 +930,69 @@ class ConnectionManager {
         }
     }
 
-    async saveTextures(textures: string[]): Promise<boolean> {
-        if (hasCapability("api/save-textures") && this.authToken !== undefined) {
-            try {
-                await axiosToPusher.post(
-                    "save-textures",
-                    {
-                        textures,
-                        roomUrl: this.currentRoom?.key,
-                    },
-                    {
-                        headers: {
-                            Authorization: this.authToken,
-                        },
-                    }
-                );
-                // Broadcast texture change to other users in the room via WebSocket
-                this._roomConnection?.emitPlayerTextures(textures);
-                return true;
-            } catch (err) {
-                if (isAxiosError(err) && err.response?.status === 401) {
-                    console.warn("saveTextures: token expired, refreshing via /me");
-                    try {
-                        const meRes = await axiosToPusher.get("me", {
-                            headers: { Authorization: this.authToken ?? "" },
-                        });
-                        const { MeResponse } = await import("@workadventure/messages");
-                        const parsed = MeResponse.parse(meRes.data);
-                        if (parsed.status !== "ok" || !("authToken" in parsed)) {
-                            console.error("saveTextures: /me returned non-ok status");
-                            return false;
-                        }
-                        this.adoptRefreshedAuthToken((parsed as { authToken: string }).authToken);
-                        // Retry with fresh token
-                        await axiosToPusher.post(
-                            "save-textures",
-                            {
-                                textures,
-                                roomUrl: this.currentRoom?.key,
-                            },
-                            {
-                                headers: {
-                                    Authorization: this.authToken,
-                                },
-                            }
-                        );
-                        this._roomConnection?.emitPlayerTextures(textures);
-                        return true;
-                    } catch (refreshErr) {
-                        console.error("saveTextures: token refresh failed", refreshErr);
-                        return false;
-                    }
-                }
-                console.error("saveTextures: HTTP POST failed", err);
-                return false;
-            }
-        } else {
-            console.warn(
-                "saveTextures: skipped — missing auth or capability. authToken:",
-                !!this.authToken,
-                "capability:",
-                hasCapability("api/save-textures")
-            );
-            return false;
+    /**
+     * Saves the player's WOKA. "saved" also covers a guest (nothing is kept on an account, the device remembers it).
+     * "notAllowed" is the admin refusing this WOKA here; "failed" is anything else, so the caller can tell the player
+     * and keep what they wear.
+     */
+    async saveTextures(textures: string[]): Promise<SaveResult> {
+        const result = await this.postAccountSave("saveTextures", "save-textures", { textures });
+        if (result === "saved") {
+            // Broadcast texture change to other users in the room via WebSocket
+            this._roomConnection?.emitPlayerTextures(textures);
         }
+        return result;
     }
 
-    async saveCompanionTexture(texture: string | null): Promise<boolean> {
-        if (hasCapability("api/save-textures") && this.authToken !== undefined) {
-            try {
-                await axiosToPusher.post(
-                    "save-companion-texture",
-                    {
-                        texture,
-                        roomUrl: this.currentRoom?.key,
-                    },
-                    {
-                        headers: {
-                            Authorization: this.authToken,
-                        },
-                    }
-                );
-                return true;
-            } catch (err) {
-                if (isAxiosError(err) && err.response?.status === 401) {
-                    console.warn("saveCompanionTexture: token expired, refreshing via /me");
-                    try {
-                        const meRes = await axiosToPusher.get("me", {
-                            headers: { Authorization: this.authToken ?? "" },
-                        });
-                        const { MeResponse } = await import("@workadventure/messages");
-                        const parsed = MeResponse.parse(meRes.data);
-                        if (parsed.status !== "ok" || !("authToken" in parsed)) {
-                            console.error("saveCompanionTexture: /me returned non-ok");
-                            return false;
-                        }
-                        this.adoptRefreshedAuthToken((parsed as { authToken: string }).authToken);
-                        await axiosToPusher.post(
-                            "save-companion-texture",
-                            {
-                                texture,
-                                roomUrl: this.currentRoom?.key,
-                            },
-                            {
-                                headers: {
-                                    Authorization: this.authToken,
-                                },
-                            }
-                        );
-                        return true;
-                    } catch (refreshErr) {
-                        console.error("saveCompanionTexture: token refresh failed", refreshErr);
-                        return false;
-                    }
-                }
-                console.error("saveCompanionTexture: HTTP POST failed", err);
-                return false;
-            }
-        } else {
+    async saveCompanionTexture(texture: string | null): Promise<SaveResult> {
+        return await this.postAccountSave("saveCompanionTexture", "save-companion-texture", { texture });
+    }
+
+    /** One save to the pusher, with the one retry after a 401 that every save has. */
+    private async postAccountSave(what: string, path: string, payload: object): Promise<SaveResult> {
+        if (!hasCapability("api/save-textures") || this.authToken === undefined) {
+            // A guest: no account to save to. The device keeps it, as before.
             console.warn(
-                "saveCompanionTexture: skipped — missing auth or capability. authToken:",
+                `${what}: skipped — missing auth or capability. authToken:`,
                 !!this.authToken,
                 "capability:",
                 hasCapability("api/save-textures")
             );
-            return false;
+            return "saved";
+        }
+        const post = () =>
+            axiosToPusher.post(
+                path,
+                { ...payload, roomUrl: this.currentRoom?.key },
+                { headers: { Authorization: this.authToken } }
+            );
+        try {
+            await post();
+            return "saved";
+        } catch (err) {
+            if (isAxiosError(err) && err.response?.status === 401) {
+                console.warn(`${what}: token expired, refreshing via /me`);
+                try {
+                    const meRes = await axiosToPusher.get("me", {
+                        headers: { Authorization: this.authToken ?? "" },
+                    });
+                    const { MeResponse } = await import("@workadventure/messages");
+                    const parsed = MeResponse.parse(meRes.data);
+                    if (parsed.status !== "ok" || !("authToken" in parsed)) {
+                        console.error(`${what}: /me returned non-ok status`);
+                        return "failed";
+                    }
+                    this.adoptRefreshedAuthToken((parsed as { authToken: string }).authToken);
+                    // Retry with fresh token
+                    await post();
+                    return "saved";
+                } catch (refreshErr) {
+                    console.error(`${what}: token refresh failed`, refreshErr);
+                    return saveFailure(refreshErr);
+                }
+            }
+            console.error(`${what}: HTTP POST failed`, err);
+            return saveFailure(err);
         }
     }
 

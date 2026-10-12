@@ -9,6 +9,7 @@ import type {
     OauthRefreshToken,
     RoomRedirect,
     Capabilities,
+    WokaMine,
 } from "@workadventure/messages";
 import { OpidWokaNamePolicy } from "@workadventure/messages";
 import axios from "axios";
@@ -425,6 +426,10 @@ class LocalAdmin implements AdminInterface {
 
     saveCompanionTexture(userIdentifier: string, texture: string | null, roomUrl: string): Promise<void> {
         return Promise.reject(new Error("No admin backoffice set!"));
+    }
+
+    getWokaMine(userIdentifier: string, roomUrl: string): Promise<WokaMine | undefined> {
+        return Promise.resolve(undefined);
     }
 
     public getCapabilities(): Promise<Capabilities> {

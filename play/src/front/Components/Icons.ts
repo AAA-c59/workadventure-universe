@@ -181,3 +181,5 @@ export { default as IconPlayerPlayFilled } from "~icons/tabler/player-play-fille
 export { default as IconGif } from "~icons/tabler/gif";
 export { default as IconTrendingUp } from "~icons/tabler/trending-up";
 export { default as IconWifiOff } from "~icons/tabler/wifi-off";
+export { default as IconHistory } from "~icons/tabler/history";
+export { default as IconArrowRight } from "~icons/tabler/arrow-right";

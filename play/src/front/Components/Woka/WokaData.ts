@@ -1,5 +1,8 @@
+import { wokaMine } from "@workadventure/messages";
+import type { WokaMine } from "@workadventure/messages";
 import { gameManager } from "../../Phaser/Game/GameManager";
 import { localUserStore } from "../../Connection/LocalUserStore";
+import { hasCapability } from "../../Connection/Capabilities";
 import { ABSOLUTE_PUSHER_URL } from "../../Enum/ComputedConst";
 import type { WokaData, WokaTexture } from "./WokaTypes";
 
@@ -67,4 +70,28 @@ export function texturesByPart(textureIds: string[] | null, wokaData: WokaData):
         if (first) result.woka = first;
     }
     return result;
+}
+
+/**
+ * What the signed-in player wears and wore lately, as seen from the room they are in (`woka/mine`): the popup draws
+ * its outfits from it and the picker its Recent row. Asked each time, since every pick changes it. Undefined for a
+ * guest, when the server does not tell, or when the request fails: the callers then go on without it.
+ */
+export async function fetchWokaMine(): Promise<WokaMine | undefined> {
+    if (!localUserStore.isLogged() || !hasCapability("api/woka/mine")) return undefined;
+    try {
+        const roomUrl = gameManager.currentStartedRoom.href;
+        const response = await fetch(`${ABSOLUTE_PUSHER_URL}woka/mine?roomUrl=${encodeURIComponent(roomUrl)}`, {
+            headers: {
+                Authorization: localUserStore.getAuthToken() || "",
+            },
+            credentials: "include",
+        });
+        if (!response.ok) return undefined;
+        const parsed = wokaMine.safeParse(await response.json());
+        return parsed.success ? parsed.data : undefined;
+    } catch (err) {
+        console.warn("Cannot load what you wore lately:", err);
+        return undefined;
+    }
 }

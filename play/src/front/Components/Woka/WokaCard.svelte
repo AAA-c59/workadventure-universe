@@ -7,7 +7,7 @@
     import WokaImage from "./WokaImage.svelte";
     import { getWokaTextureUrl } from "./WokaData";
     import type { WokaData } from "./WokaTypes";
-    import { IconChevronLeft, IconChevronRight, IconRotate, IconShuffle, IconX } from "@wa-icons";
+    import { IconAlertTriangle, IconChevronLeft, IconChevronRight, IconRotate, IconShuffle, IconX } from "@wa-icons";
 
     /**
      * The card both WOKA screens share (the picker and Build your WOKA): the spotlight preview with Rotate and
@@ -17,6 +17,10 @@
     export let eyebrow: string;
     export let title: string;
     export let selectedTextures: Record<string, string>;
+    /** An outfit from the server to show in the preview instead of `selectedTextures` (a Recent one): its pictures */
+    export let previewLayers: string[] | null = null;
+    /** Why the last Continue did not save: kept above the buttons, with the picker still open */
+    export let saveError = "";
     export let wokaData: WokaData | null;
     export let isLoading: boolean;
     export let error: string;
@@ -84,7 +88,8 @@
     function fitTiles() {
         if (!tilesBox || !tiles) return;
         const grid = tiles.firstElementChild;
-        const tile = grid?.firstElementChild;
+        // The first tile (the Recent page has a label above its tiles)
+        const tile = grid?.querySelector("[role=radio]") ?? grid?.firstElementChild;
         if (!(grid instanceof HTMLElement) || !(tile instanceof HTMLElement)) {
             tilesHeight = undefined;
             return;
@@ -260,6 +265,7 @@
                         <span class="woka-spot-sprite">
                             <WokaImage
                                 {selectedTextures}
+                                layers={previewLayers}
                                 {wokaData}
                                 getTextureUrl={getWokaTextureUrl}
                                 canvasSize={previewSize}
@@ -378,6 +384,13 @@
                     </div>
                 </div>
             </div>
+
+            {#if saveError}
+                <p class="woka-save-error" role="alert">
+                    <IconAlertTriangle font-size="18" />
+                    <span>{saveError}</span>
+                </p>
+            {/if}
 
             <footer class="woka-footer">
                 <slot name="footer" />
@@ -549,6 +562,33 @@
     @keyframes woka-spin {
         to {
             transform: rotate(360deg);
+        }
+    }
+    /* The save error: coral, above Build / Continue (the buttons are pinned to the bottom on a phone) */
+    .woka-save-error {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+        margin: 0 1.75rem 0.75rem;
+        padding: 0.625rem 0.75rem;
+        border-radius: 12px;
+        background: rgba(233, 109, 81, 0.22);
+        color: #ffd9cf;
+        font-size: 13px;
+        line-height: 1.35;
+    }
+    .woka-save-error :global(svg) {
+        flex: none;
+        margin-top: 1px;
+    }
+    @media (max-width: 767px) {
+        .woka-save-error {
+            position: fixed;
+            left: 1rem;
+            right: 1rem;
+            bottom: 5.75rem;
+            z-index: 4;
+            margin: 0;
         }
     }
     .woka-footer {
