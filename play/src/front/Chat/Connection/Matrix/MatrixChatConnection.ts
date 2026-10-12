@@ -407,6 +407,9 @@ export class MatrixChatConnection implements ChatConnectionInterface {
     }
 
     private onAccountDataEvent(event: MatrixEvent) {
+        if (event.getType() === EventType.Direct) {
+            this.refreshRoomTypes();
+        }
         if (event.getType() === EventType.IgnoredUserList) {
             this._ignoredUsers.set(this.client?.getIgnoredUsers() ?? []);
         }
@@ -431,6 +434,21 @@ export class MatrixChatConnection implements ChatConnectionInterface {
                 .forEach((room) => {
                     room.setNotificationSilent(false);
                 });
+        }
+    }
+
+    /**
+     * A chat's type (direct or group) is decided when it is created, but the account's list of direct chats can arrive
+     * after the chat itself. Chats that turn out to be direct are made again, so they show the person and not the
+     * chat account's name (#834).
+     */
+    private refreshRoomTypes(): void {
+        for (const room of Array.from(this.roomList.values())) {
+            if (!room.hasOutdatedType()) continue;
+            const matrixRoom = this.client?.getRoom(room.id);
+            if (!matrixRoom) continue;
+            this.roomList.delete(room.id);
+            this.createAndAddNewRootRoom(matrixRoom);
         }
     }
 

@@ -675,6 +675,14 @@ export class MatrixChatRoom
         return;
     }
 
+    /**
+     * Whether the chat now looks different from the type it was created with. The type is decided once, in the
+     * constructor, but the account's list of direct chats (`m.direct`) can arrive after the room does.
+     */
+    hasOutdatedType(): boolean {
+        return this.getMatrixRoomType() !== this.type;
+    }
+
     private getMatrixRoomType(): "direct" | "multiple" {
         const dmInviter = this.matrixRoom.getDMInviter();
         if (dmInviter) {
