@@ -12,7 +12,7 @@
     /**
      * The card both WOKA screens share (the picker and Build your WOKA): the spotlight preview with Rotate and
      * Randomize on the left, the title, the category pills and the tiles on the right, the buttons at the bottom.
-     * The tiles scroll down and the categories sideways; swiping the tiles sideways changes the category.
+     * The tiles scroll down and the categories sideways; swiping sideways anywhere under the pills changes the category.
      */
     export let eyebrow: string;
     export let title: string;
@@ -119,7 +119,7 @@
         thumbTop = scrollHeight > clientHeight + 2 ? (scrollTop / scrollHeight) * 100 : 0;
     }
 
-    // Swiping the tiles sideways moves to the next or previous category (phones). The tiles follow the finger, and
+    // Swiping sideways under the pills moves to the next or previous category (phones). The tiles follow the finger, and
     // the categories on either side are already drawn, so the next one is there as soon as it slides in.
     let swipeHintBox: HTMLParagraphElement | undefined;
     let pagesBox: HTMLDivElement | undefined;
@@ -339,21 +339,21 @@
                             {/if}
                         </div>
                     {/if}
-                    <div class="flex-1 min-h-0 md:mt-3 flex flex-col" bind:this={tilesBox}>
+                    <!-- The whole area under the pills takes the swipe, also the empty space below a short page -->
+                    <div
+                        class="woka-swipe-area flex-1 min-h-0 md:mt-3 flex flex-col"
+                        bind:this={tilesBox}
+                        on:touchstart|passive={onTouchStart}
+                        on:touchmove|nonpassive={onTouchMove}
+                        on:touchend={onTouchEnd}
+                        on:touchcancel={onTouchEnd}
+                    >
                         <div
                             class="woka-tiles relative min-h-0"
                             class:woka-tiles-more={moreBelow}
                             style={tilesHeight ? `height: ${tilesHeight}px;` : ""}
                         >
-                            <div
-                                class="woka-pages h-full"
-                                class:woka-pages-sliding={sliding}
-                                bind:this={pagesBox}
-                                on:touchstart|passive={onTouchStart}
-                                on:touchmove|nonpassive={onTouchMove}
-                                on:touchend={onTouchEnd}
-                                on:touchcancel={onTouchEnd}
-                            >
+                            <div class="woka-pages h-full" class:woka-pages-sliding={sliding} bind:this={pagesBox}>
                                 {#each pageIndexes as index (index)}
                                     <div
                                         class="woka-tiles-scroll h-full overflow-y-auto"
@@ -481,6 +481,9 @@
     }
     .woka-tiles {
         margin-right: 12px;
+    }
+    .woka-swipe-area {
+        touch-action: pan-y;
     }
     .woka-pages {
         position: relative;

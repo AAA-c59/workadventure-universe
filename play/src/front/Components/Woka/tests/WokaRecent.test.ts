@@ -143,4 +143,61 @@ describe("the Recent row in the WOKA picker", () => {
 
         expect(saveAndContinue).toHaveBeenCalledWith(["plum"]);
     });
+
+    describe("swiping on a phone", () => {
+        /** A finger going from one point to another, as the browser sends it (jsdom has no Touch). */
+        function drag(node: Element, from: [number, number], to: [number, number]) {
+            const send = (type: string, point: [number, number] | undefined) => {
+                const event = new Event(type, { bubbles: true, cancelable: true });
+                const touches = point ? [{ clientX: point[0], clientY: point[1] }] : [];
+                Object.assign(event, { touches, changedTouches: touches });
+                node.dispatchEvent(event);
+            };
+            send("touchstart", from);
+            send("touchmove", to);
+            send("touchend", undefined);
+        }
+
+        // The page slides for 220ms before the collection changes
+        const slid = async () => {
+            // eslint-disable-next-line no-promise-executor-return
+            await new Promise((resolve) => setTimeout(resolve, 300));
+            await settle();
+        };
+
+        it("changes the collection from the empty space under the tiles, not only from the tiles", async () => {
+            await open([outfit("teal", true), outfit("plum")]);
+            const area = target.querySelector(".woka-swipe-area");
+            const pages = target.querySelector(".woka-pages");
+            expect(area).not.toBeNull();
+            // The swipe lives on the whole area, so it reaches past where the tiles end
+            expect(pages && area?.contains(pages)).toBe(true);
+            expect(pills()[0].getAttribute("aria-selected")).toBe("true");
+
+            drag(target.querySelector(".woka-swipe-hint") ?? area!, [250, 300], [100, 300]);
+            await slid();
+            expect(pills()[1].getAttribute("aria-selected")).toBe("true");
+
+            drag(target.querySelector(".woka-swipe-hint") ?? area!, [100, 300], [250, 300]);
+            await slid();
+            expect(pills()[0].getAttribute("aria-selected")).toBe("true");
+        });
+
+        it("keeps an up and down drag for scrolling, and ignores a short sideways one", async () => {
+            await open([outfit("teal", true), outfit("plum")]);
+            const area = target.querySelector(".woka-swipe-area")!;
+
+            drag(area, [200, 400], [190, 150]);
+            await slid();
+            drag(area, [200, 400], [170, 400]);
+            await slid();
+
+            expect(pills()[0].getAttribute("aria-selected")).toBe("true");
+        });
+
+        it("the hint no longer talks about the tiles", async () => {
+            await open([outfit("teal", true)]);
+            expect(target.querySelector(".woka-swipe-hint")?.textContent).toContain("woka.selectWoka.swipeHint");
+        });
+    });
 });
