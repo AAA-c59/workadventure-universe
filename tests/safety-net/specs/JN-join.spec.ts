@@ -130,8 +130,10 @@ test.describe("Join: WOKA picker", () => {
         await expect(page.locator("button.wokaBuildButton span:visible")).toHaveText("Build your WOKA");
         await expect(page.locator("button.wokaBuildButton svg")).toBeVisible();
         await expect(page.locator("button.selectCharacterSceneFormSubmit")).toHaveText("Continue");
-        // One collection on the local stack: no pills.
-        await expect(page.getByRole("tab")).toHaveCount(0);
+        // One collection on the local stack: its pill is still there, on, and there is no Recent row (nobody wore a WOKA).
+        await expect(page.getByRole("tab")).toHaveCount(1);
+        await expect(page.getByRole("tab").first()).toHaveAttribute("aria-selected", "true");
+        await expect(page.locator(".woka-recent-row")).toHaveCount(0);
         const tile = wokaTiles(page).first().locator("canvas");
         // Khalid 10-06 (dev findings, item 21): the preview no longer turns on its own, only when you press Rotate.
         // (The row still describes the old 2.4 s loop.) Wait two turns' worth, then check nothing moved.

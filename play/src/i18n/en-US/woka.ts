@@ -44,7 +44,6 @@ const woka: BaseTranslation = {
         saveFailed:
             "Your WOKA wasn't saved, so you're still wearing your current one. Check your connection and tap Continue again.",
         saveNotAllowed: "This WOKA isn't available here. Pick another one.",
-        recent: "Recent",
         recentLabel: "Worn lately, allowed here",
         now: "Now",
         swipeHint: "swipe for the next collection",
