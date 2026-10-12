@@ -2038,3 +2038,111 @@ button[data-testid="actionBarLogin"]:hover {
         animation: none;
     }
 }
+
+// Player names over the Wokas (UsernameDisplay.ts). Sizes, padding and radius are set from the code, in game pixels
+// scaled by --username-dom-scale. One solid Universe ink pill for every status; only the dot colour changes.
+.username-display {
+    position: absolute;
+    top: 0;
+    left: 0;
+    margin: 0;
+    box-sizing: border-box;
+    transform-origin: center center;
+    align-items: center;
+    border-radius: 999px;
+    // The pill never takes clicks: the Woka and the map below it stay clickable.
+    pointer-events: none;
+    will-change: transform;
+    user-select: none;
+    white-space: nowrap;
+    // By default, the name is hidden and only shown once the whole game scene is.
+    display: none;
+
+    // Inter, bundled (index.scss).
+    font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-weight: 600;
+    letter-spacing: 0.005em;
+    color: #fff;
+    background: rgb(20 18 30 / 0.88);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08), 0 1px 2px rgb(0 0 0 / 0.3);
+
+    // The pointer is over the player, or the player walked up to them: the lighter pill.
+    &.is-highlighted {
+        background: rgb(46 42 66 / 0.96);
+        box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.2), 0 2px 6px rgb(0 0 0 / 0.4);
+    }
+}
+
+.game-scene-loaded .username-display {
+    display: flex;
+}
+
+.username-display-name {
+    margin: 0;
+    font-size: calc(10px * var(--username-dom-scale, 1));
+    line-height: 1;
+    pointer-events: none;
+}
+
+// The bubble above the pill while a player talks.
+.username-talk-bubble {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + var(--username-bubble-gap, 3px));
+    transform: translateX(-50%);
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: #fff;
+    box-shadow: 0 1px 3px rgb(10 8 20 / 0.45);
+    pointer-events: none;
+
+    // The small tail at the bottom centre.
+    &::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        bottom: 0;
+        width: var(--username-talk-tail, 4px);
+        height: var(--username-talk-tail, 4px);
+        background: #fff;
+        transform: translate(-50%, 45%) rotate(45deg);
+        border-radius: 0 0 2px 0;
+    }
+
+    i {
+        display: block;
+        position: relative;
+        z-index: 1;
+        border-radius: 50%;
+        background: #14121e;
+        animation: username-talk-wave 1.2s ease-in-out infinite;
+
+        &:nth-child(2) {
+            animation-delay: 0.15s;
+        }
+
+        &:nth-child(3) {
+            animation-delay: 0.3s;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        i {
+            animation: none;
+        }
+    }
+}
+
+@keyframes username-talk-wave {
+    0%,
+    60%,
+    100% {
+        transform: translateY(0);
+        opacity: 0.55;
+    }
+    30% {
+        transform: translateY(-30%);
+        opacity: 1;
+    }
+}
