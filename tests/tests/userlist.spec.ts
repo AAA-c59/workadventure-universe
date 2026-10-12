@@ -61,12 +61,9 @@ test.describe("Send Message from User List @oidc @matrix @chat", () => {
     await chatUtils.slideToUsers(userBob);
     await chatUtils.UL_sendMessage(userBob, "Admin1");
 
-    // The direct chat header shows the partner's current game name ("Admin1", #730). A room the chat has not yet
-    // recognised as direct (its m.direct data can arrive after the room, seen in Firefox) uses the plain header with the
-    // chat account's name ("John Doe"); either way this is the chat with Admin1.
-    await expect(userBob.getByTestId("roomName")).toHaveText(
-      /^(Admin1|John Doe)$/
-    );
+    // The direct chat header shows the partner's current game name (#730). A chat that was created before the account's
+    // m.direct list arrived is made again as direct once it does (#834), so the name is never the chat account's.
+    await expect(userBob.getByTestId("roomName")).toHaveText("Admin1");
     await adminPage.context().close();
   });
 

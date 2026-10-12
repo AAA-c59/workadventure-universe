@@ -675,6 +675,14 @@ export class MatrixChatRoom
         return;
     }
 
+    /**
+     * Whether the chat now looks different from the type it was created with. The type is decided once, in the
+     * constructor, but the account's list of direct chats (`m.direct`) can arrive after the room does.
+     */
+    hasOutdatedType(): boolean {
+        return this.getMatrixRoomType() !== this.type;
+    }
+
     private getMatrixRoomType(): "direct" | "multiple" {
         const dmInviter = this.matrixRoom.getDMInviter();
         if (dmInviter) {
@@ -691,10 +699,14 @@ export class MatrixChatRoom
             return "multiple";
         }
 
-        const directRoomsPerUsers = this.matrixRoom.client.getAccountData(EventType.Direct)?.getContent();
+        // The list names the chat itself, so it does not matter whether the other person's membership has loaded yet
+        // (a new chat has no members for a moment, and its name is then the empty-room name).
+        const directRoomsPerUsers: Record<string, string[] | undefined> | undefined = this.matrixRoom.client
+            .getAccountData(EventType.Direct)
+            ?.getContent();
 
-        const isDirectBasedOnRoomData = members.some(
-            (member) => directRoomsPerUsers && directRoomsPerUsers[member.userId]?.includes(this.id)
+        const isDirectBasedOnRoomData = Object.values(directRoomsPerUsers ?? {}).some((roomIds) =>
+            roomIds?.includes(this.id)
         );
 
         if (isDirectBasedOnRoomData) {
@@ -806,6 +818,7 @@ export class MatrixChatRoom
         this.matrixRoom.off(RoomEvent.Name, this.handleRoomName);
         this.matrixRoom.off(RoomEvent.Redaction, this.handleRoomRedaction);
         this.matrixRoom.off(RoomStateEvent.Events, this.handleStateEvent);
+        this.matrixRoom.off(RoomEvent.MyMembership, this.handleMyMembership);
         this.matrixRoom.off(RoomStateEvent.NewMember, this.handleNewMember);
         get(this.members).forEach((member) => {
             member.destroy();

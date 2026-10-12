@@ -970,4 +970,56 @@ describe("MatrixChatConnection", () => {
             expect(mockSetAccountData.mock.calls[0][1][userId]).toContain(roomId2);
         });
     });
+    describe("a direct chat whose m.direct list arrives after the chat", () => {
+        const roomId = "!dm:chat.example.com";
+
+        async function connectionWith(rooms: Record<string, Partial<MatrixChatRoom>>) {
+            const matrixRoom = { roomId };
+            const client = { getRoom: vi.fn().mockReturnValue(matrixRoom) } as unknown as MatrixClient;
+            const connection = await getMatrixConnection(Promise.resolve(client));
+            Object.entries(rooms).forEach(([id, room]) =>
+                connection["roomList"].set(id, { id, ...room } as unknown as MatrixChatRoom)
+            );
+            const created = vi
+                .spyOn(
+                    connection as unknown as { createAndAddNewRootRoom: (room: unknown) => unknown },
+                    "createAndAddNewRootRoom"
+                )
+                .mockImplementation(() => undefined);
+            return { connection, client, matrixRoom, created };
+        }
+
+        const event = (type: string) =>
+            ({ getType: () => type } as unknown as Parameters<MatrixChatConnection["onAccountDataEvent"]>[0]);
+
+        it("makes a chat again when the m.direct list changes its type, and leaves the others alone", async () => {
+            const stale = { hasOutdatedType: () => true, destroy: vi.fn() };
+            const current = { hasOutdatedType: () => false, destroy: vi.fn() };
+            const { connection, client, matrixRoom, created } = await connectionWith({
+                [roomId]: stale,
+                other: current,
+            });
+
+            connection["onAccountDataEvent"](event(EventType.Direct));
+
+            expect(stale.destroy).toHaveBeenCalledOnce();
+            expect(connection["roomList"].has(roomId)).toBe(false);
+            //eslint-disable-next-line @typescript-eslint/unbound-method
+            expect(client.getRoom).toHaveBeenCalledWith(roomId);
+            expect(created).toHaveBeenCalledExactlyOnceWith(matrixRoom);
+            expect(current.destroy).not.toHaveBeenCalled();
+            expect(connection["roomList"].has("other")).toBe(true);
+        });
+
+        it("does nothing for other account data", async () => {
+            const stale = { hasOutdatedType: vi.fn(() => true), destroy: vi.fn() };
+            const { connection, created } = await connectionWith({ [roomId]: stale });
+
+            connection["onAccountDataEvent"](event("m.push_rules_other"));
+
+            expect(stale.hasOutdatedType).not.toHaveBeenCalled();
+            expect(stale.destroy).not.toHaveBeenCalled();
+            expect(created).not.toHaveBeenCalled();
+        });
+    });
 });
