@@ -52,17 +52,17 @@ describe("saves from the room the player is in", () => {
     });
 
     it.each([
-        ["saveTextures", () => connectionManager.saveTextures(["body"])],
-        ["saveName", () => connectionManager.saveName("Ali")],
-        ["saveCompanionTexture", () => connectionManager.saveCompanionTexture("dog")],
-    ])("%s: sends the room of the latest map, not the first one", async (_name, save) => {
+        ["saveTextures", () => connectionManager.saveTextures(["body"]), "saved"],
+        ["saveName", () => connectionManager.saveName("Ali"), true],
+        ["saveCompanionTexture", () => connectionManager.saveCompanionTexture("dog"), "saved"],
+    ])("%s: sends the room of the latest map, not the first one", async (_name, save, ok) => {
         connectionManager.setCurrentRoom(room(DEFAULT_WORLD));
-        expect(await save()).toBe(true);
+        expect(await save()).toBe(ok);
         expect(lastRoomUrl()).toBe(DEFAULT_WORLD);
 
         // The player walks into a world of another universe: the page is not reloaded.
         connectionManager.setCurrentRoom(room(OTHER_UNIVERSE));
-        expect(await save()).toBe(true);
+        expect(await save()).toBe(ok);
         expect(lastRoomUrl()).toBe(OTHER_UNIVERSE);
     });
 });

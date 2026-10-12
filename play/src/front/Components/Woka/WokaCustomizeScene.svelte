@@ -13,6 +13,8 @@
     export let back: () => void;
     export let saveAndContinue: (texturesId: string[]) => void;
     export let close: (() => void) | undefined = undefined;
+    /** Why the last Finish did not save, shown above the buttons */
+    export let saveError = "";
 
     const bodyPartOrder: WokaBodyPart[] = ["body", "eyes", "hair", "clothes", "hat", "accessory"];
     const partIcons = [IconPalette, IconEye, IconScissors, IconShirt, HatOutlineIcon, IconEyeglass];
@@ -151,6 +153,7 @@
     eyebrow={$LL.woka.customWoka.eyebrow()}
     title={$LL.woka.customWoka.heading()}
     {selectedTextures}
+    {saveError}
     {wokaData}
     {isLoading}
     {error}

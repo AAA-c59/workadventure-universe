@@ -14,6 +14,9 @@ const companion: BaseTranslation = {
         browse: "to browse",
         continueHint: "to continue",
         close: "Back to your room",
+        saveFailed:
+            "Your companion wasn't saved, so you still have your current one. Check your connection and tap Continue again.",
+        saveNotAllowed: "This companion isn't available here. Pick another one.",
     },
 };
 

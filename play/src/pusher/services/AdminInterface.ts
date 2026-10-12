@@ -7,6 +7,7 @@ import type {
     OauthRefreshToken,
     RoomRedirect,
     Capabilities,
+    WokaMine,
 } from "@workadventure/messages";
 import type { AdminBannedData, FetchMemberDataByUuidResponse } from "./AdminApi";
 import type { BanAppealResult, BanDetailsData } from "./BanDetails";
@@ -138,6 +139,12 @@ export interface AdminInterface {
     saveTextures(userIdentifier: string, textures: string[], roomUrl: string): Promise<void>;
 
     saveCompanionTexture(userIdentifier: string, texture: string | null, roomUrl: string): Promise<void>;
+
+    /**
+     * What the player wears and wore lately, as seen from this room. Undefined when the admin has no such answer
+     * (it does not offer it, or the player is a guest). Throws when the admin fails.
+     */
+    getWokaMine(userIdentifier: string, roomUrl: string): Promise<WokaMine | undefined>;
 
     getCapabilities(): Promise<Capabilities>;
 
