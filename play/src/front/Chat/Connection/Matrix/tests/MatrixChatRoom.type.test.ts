@@ -24,13 +24,16 @@ describe("the type of a Matrix chat", () => {
     const bob = "@bob:chat.example.com";
 
     /** A chat between two people: it is direct only once the account's m.direct list names it. */
-    function matrixRoomWith(directRooms: Record<string, string[]> | undefined) {
+    function matrixRoomWith(directRooms: Record<string, string[]> | undefined, membersLoaded = true) {
         return {
             getDMInviter: () => undefined,
-            getMembers: () => [
-                { userId: "@me:chat.example.com", getDMInviter: () => undefined },
-                { userId: bob, getDMInviter: () => undefined },
-            ],
+            getMembers: () =>
+                membersLoaded
+                    ? [
+                          { userId: "@me:chat.example.com", getDMInviter: () => undefined },
+                          { userId: bob, getDMInviter: () => undefined },
+                      ]
+                    : [],
             client: {
                 getAccountData: () => (directRooms ? { getContent: () => directRooms } : undefined),
             },
@@ -58,6 +61,20 @@ describe("the type of a Matrix chat", () => {
 
     it("is out of date when it was created before the m.direct list arrived", () => {
         expect(typeOf(matrixRoomWith({ [bob]: [roomId] }), "multiple")).toEqual({ decided: "direct", outdated: true });
+    });
+
+    it("is direct when the m.direct list names it, even before the other person's membership has loaded", () => {
+        expect(typeOf(matrixRoomWith({ [bob]: [roomId] }, false), "multiple")).toEqual({
+            decided: "direct",
+            outdated: true,
+        });
+    });
+
+    it("is not direct when the m.direct list names other chats only", () => {
+        expect(typeOf(matrixRoomWith({ [bob]: ["!other:chat.example.com"] }), "multiple")).toEqual({
+            decided: "multiple",
+            outdated: false,
+        });
     });
 
     it("is up to date when it was created with the m.direct list", () => {

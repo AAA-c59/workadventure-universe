@@ -699,10 +699,14 @@ export class MatrixChatRoom
             return "multiple";
         }
 
-        const directRoomsPerUsers = this.matrixRoom.client.getAccountData(EventType.Direct)?.getContent();
+        // The list names the chat itself, so it does not matter whether the other person's membership has loaded yet
+        // (a new chat has no members for a moment, and its name is then the empty-room name).
+        const directRoomsPerUsers: Record<string, string[] | undefined> | undefined = this.matrixRoom.client
+            .getAccountData(EventType.Direct)
+            ?.getContent();
 
-        const isDirectBasedOnRoomData = members.some(
-            (member) => directRoomsPerUsers && directRoomsPerUsers[member.userId]?.includes(this.id)
+        const isDirectBasedOnRoomData = Object.values(directRoomsPerUsers ?? {}).some((roomIds) =>
+            roomIds?.includes(this.id)
         );
 
         if (isDirectBasedOnRoomData) {
