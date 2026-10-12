@@ -49,6 +49,12 @@ function accessTokenExpiry(accessToken: string): number | null {
 const ACCESS_TOKEN_MARGIN_MS = 60_000;
 
 /**
+ * How long a /me renewal may take. Without a limit a play server that accepts the request and never answers would
+ * hold up the room join for good, since the join waits for the renewal; at the limit it counts as a failed renewal.
+ */
+const RENEWAL_TIMEOUT_MS = 10_000;
+
+/**
  * The /me renewal in flight, shared by every request made with the same game token (Orbit's frame and the bot
  * editor alike). A forced request doesn't join an unforced one: that one may hand back the very token just refused.
  */
@@ -79,6 +85,7 @@ async function renewGameToken(
 ): Promise<string | null> {
     try {
         const response = await axiosToPusher.get("me", {
+            timeout: RENEWAL_TIMEOUT_MS,
             // `refresh` makes the pusher renew an access token the provider still accepts but Orbit refused.
             params: { token: gameToken, playUri: holder.roomId, ...(force ? { refresh: "true" } : {}) },
         });
