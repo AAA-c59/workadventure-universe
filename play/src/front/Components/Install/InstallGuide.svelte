@@ -4,7 +4,23 @@
     import { LL } from "../../../i18n/i18n-svelte";
     import { installApp } from "../../Install/InstallWiring";
     import { installIconSrc } from "../../Install/InstallIcon";
-    import { IconArrowDown, IconCheck, IconCopy, IconDots, IconShare2, IconSquarePlus, IconX } from "@wa-icons";
+    import type { InstallGuide } from "../../Install/InstallPlatform";
+    import {
+        IconApps,
+        IconArrowDown,
+        IconCheck,
+        IconCopy,
+        IconDeviceDesktopDown,
+        IconDeviceMobileDown,
+        IconDeviceMobilePlus,
+        IconDots,
+        IconMenu2,
+        IconMoreVertical,
+        IconPlus,
+        IconShare2,
+        IconSquarePlus,
+        IconX,
+    } from "@wa-icons";
 
     const { guideOpenStore } = installApp;
     const iconSrc = installIconSrc();
@@ -19,6 +35,105 @@
             : $guideOpenStore === "ios-chrome"
             ? { text: $LL.install.guide.iosChrome, firstChip: "share" as const }
             : undefined;
+
+    // The picture on the right of a step: the browser's own button, as it draws it.
+    type Chip = "dots" | "menu" | "phoneDown" | "phonePlus" | "plus" | "desktopDown" | "apps" | "install";
+    interface BrowserSheet {
+        title: string;
+        steps: { text: string; note?: string; chips: Chip[] }[];
+        foot?: string;
+        place: "bottom" | "top" | "desktop";
+        arrow: boolean;
+    }
+
+    // One guide per browser. Edge and Samsung Internet open their menu from a bar at the bottom of the phone, so
+    // their sheet sits at the top; the others sit at the bottom.
+    function browserSheetFor(
+        guide: InstallGuide | undefined,
+        t: typeof $LL.install.guide.browserMenu
+    ): BrowserSheet | undefined {
+        switch (guide) {
+            case "browser-chrome-android":
+                return {
+                    title: t.chromeAndroid.title(),
+                    steps: [
+                        { text: t.chromeAndroid.step1(), chips: ["dots"] },
+                        { text: t.chromeAndroid.step2(), note: t.chromeAndroid.step2Older(), chips: ["phoneDown"] },
+                        { text: t.chromeAndroid.step3(), chips: ["install"] },
+                    ],
+                    place: "bottom",
+                    arrow: false,
+                };
+            case "browser-edge-android":
+                return {
+                    title: t.edgeAndroid.title(),
+                    steps: [
+                        { text: t.edgeAndroid.step1(), chips: ["menu"] },
+                        { text: t.edgeAndroid.step2(), chips: ["phonePlus"] },
+                        { text: t.edgeAndroid.step3(), chips: ["install"] },
+                    ],
+                    place: "top",
+                    arrow: false,
+                };
+            case "browser-samsung-android":
+                return {
+                    title: t.samsungAndroid.title(),
+                    steps: [
+                        { text: t.samsungAndroid.step1(), chips: ["menu"] },
+                        { text: t.samsungAndroid.step2(), chips: ["plus"] },
+                        { text: t.samsungAndroid.step3(), chips: ["install"] },
+                    ],
+                    place: "top",
+                    arrow: false,
+                };
+            case "browser-other-android":
+                return {
+                    title: t.otherAndroid.title(),
+                    steps: [
+                        { text: t.otherAndroid.step1(), chips: ["dots", "menu"] },
+                        { text: t.otherAndroid.step2(), chips: ["phoneDown"] },
+                        { text: t.otherAndroid.step3(), chips: ["install"] },
+                    ],
+                    place: "bottom",
+                    arrow: false,
+                };
+            case "browser-chrome-desktop":
+                return {
+                    title: t.chromeDesktop.title(),
+                    steps: [
+                        { text: t.chromeDesktop.step1(), chips: ["desktopDown"] },
+                        { text: t.chromeDesktop.step2(), chips: ["install"] },
+                    ],
+                    foot: t.chromeDesktop.noIcon(),
+                    place: "desktop",
+                    arrow: true,
+                };
+            case "browser-edge-desktop":
+                return {
+                    title: t.edgeDesktop.title(),
+                    steps: [
+                        { text: t.edgeDesktop.step1(), chips: ["apps"] },
+                        { text: t.edgeDesktop.step2(), chips: ["install"] },
+                    ],
+                    foot: t.edgeDesktop.noIcon(),
+                    place: "desktop",
+                    arrow: true,
+                };
+            case "browser-other-desktop":
+                return {
+                    title: t.otherDesktop.title(),
+                    steps: [
+                        { text: t.otherDesktop.step1(), chips: ["desktopDown", "dots"] },
+                        { text: t.otherDesktop.step2(), chips: ["install"] },
+                    ],
+                    place: "desktop",
+                    arrow: false,
+                };
+            default:
+                return undefined;
+        }
+    }
+    $: browserSheet = browserSheetFor($guideOpenStore, $LL.install.guide.browserMenu);
 
     let copied = false;
     let copiedTimer: ReturnType<typeof setTimeout> | undefined;
@@ -151,62 +266,80 @@
             </button>
         </div>
     </div>
-{:else if $guideOpenStore === "browser-menu-android" || $guideOpenStore === "browser-menu-desktop"}
-    <!-- The browser's own install window was cancelled and cannot open twice: point at the browser's menu. -->
+{:else if browserSheet !== undefined}
+    <!-- The browser's own install window was cancelled and cannot open twice: a guide in this browser's own words, with
+         a picture of each button to tap. Phones have no arrow (the bar can be at the top or the bottom); computers
+         point at the install icon in the address bar. -->
     <div
-        class="u-surface pointer-events-auto absolute left-1/2 top-[110px] z-[1100] flex w-[440px] max-w-[calc(100vw-1rem)] -translate-x-1/2 flex-col gap-3 rounded-[20px] p-5 text-white"
+        class="u-surface pointer-events-auto absolute z-[1100] flex flex-col gap-2 rounded-3xl px-4 pb-3.5 pt-3 text-white {browserSheet.place ===
+        'desktop'
+            ? 'right-4 top-12 w-[440px] max-w-[calc(100vw-2rem)]'
+            : `inset-x-2 mx-auto max-w-[440px] ${browserSheet.place === 'top' ? 'top-2' : 'bottom-6'}`}"
         role="dialog"
-        aria-label={$LL.install.guide.browserMenu.title()}
+        aria-label={browserSheet.title}
         data-testid="install-guide"
-        transition:fly={{ y: -50, duration: 300 }}
+        transition:fly={{ y: browserSheet.place === "bottom" ? 80 : -50, duration: 300 }}
     >
-        <div class="flex items-center gap-3">
+        <div class="mb-0.5 flex items-center gap-3">
             {#if iconSrc}
-                <img class="h-12 w-12 flex-none rounded-[22%]" src={iconSrc} alt="" />
+                <img class="h-11 w-11 flex-none rounded-[22%]" src={iconSrc} alt="" />
             {/if}
-            <b class="flex-1 text-lg leading-tight">{$LL.install.guide.browserMenu.title()}</b>
+            <b class="flex-1 text-[19px] font-extrabold leading-tight">{browserSheet.title}</b>
             <button
                 type="button"
                 class="u-close"
                 aria-label={$LL.install.guide.close()}
+                data-testid="install-guide-close"
                 on:click={() => installApp.closeGuide()}
             >
                 <IconX font-size="18" aria-hidden="true" />
             </button>
         </div>
-        <div class="flex min-h-12 items-center gap-3">
-            <span
-                class="grid h-[26px] w-[26px] flex-none place-items-center rounded-full bg-gradient-to-r from-[#8629fc] to-[#4156f6] text-[13px] font-bold"
-                >1</span
+        {#each browserSheet.steps as step, index (index)}
+            <div class="flex min-h-12 items-center gap-3">
+                <span
+                    class="grid h-[26px] w-[26px] flex-none place-items-center rounded-full text-[13px] font-bold {index ===
+                    0
+                        ? 'bg-gradient-to-r from-[#8629fc] to-[#4156f6]'
+                        : 'bg-white/10'}">{index + 1}</span
+                >
+                <span class="min-w-0 flex-1 text-sm leading-snug">
+                    {@html step.text}
+                    {#if step.note}<span class="mt-0.5 block text-xs text-white/55">{step.note}</span>{/if}
+                </span>
+                <span class="flex flex-none gap-1.5" aria-hidden="true">
+                    {#each step.chips as chip (chip)}
+                        {#if chip === "install"}
+                            <span class="chip chip-install">{$LL.install.guide.browserMenu.installButton()}</span>
+                        {:else}
+                            <span class="chip">
+                                {#if chip === "dots"}<IconMoreVertical font-size="18" />
+                                {:else if chip === "menu"}<IconMenu2 font-size="18" />
+                                {:else if chip === "phoneDown"}<IconDeviceMobileDown font-size="18" />
+                                {:else if chip === "phonePlus"}<IconDeviceMobilePlus font-size="18" />
+                                {:else if chip === "plus"}<IconPlus font-size="18" />
+                                {:else if chip === "desktopDown"}<IconDeviceDesktopDown font-size="18" />
+                                {:else}<IconApps font-size="18" />{/if}
+                            </span>
+                        {/if}
+                    {/each}
+                </span>
+            </div>
+        {/each}
+        {#if browserSheet.foot}
+            <p
+                class="m-0 border-t border-white/10 pt-2.5 text-[13px] leading-snug text-white/65 [&_b]:text-white"
+                data-testid="install-guide-no-icon"
             >
-            <span class="min-w-0 flex-1 text-sm leading-snug"
-                >{@html $guideOpenStore === "browser-menu-android"
-                    ? $LL.install.guide.browserMenu.androidStep1()
-                    : $LL.install.guide.browserMenu.desktopStep1()}</span
-            >
-        </div>
-        <div class="flex min-h-12 items-center gap-3">
-            <span
-                class="grid h-[26px] w-[26px] flex-none place-items-center rounded-full bg-white/10 text-[13px] font-bold"
-                >2</span
-            >
-            <span class="min-w-0 flex-1 text-sm leading-snug"
-                >{@html $guideOpenStore === "browser-menu-android"
-                    ? $LL.install.guide.browserMenu.androidStep2()
-                    : $LL.install.guide.browserMenu.desktopStep2()}</span
-            >
-        </div>
-        <div class="flex">
-            <button
-                type="button"
-                class="u-cta-secondary flex min-h-[44px] flex-1 items-center justify-center whitespace-nowrap rounded-full px-4 text-sm font-bold"
-                data-testid="install-guide-close"
-                on:click={() => installApp.closeGuide()}
-            >
-                {$LL.install.guide.browserMenu.gotIt()}
-            </button>
-        </div>
+                {@html browserSheet.foot}
+            </p>
+        {/if}
     </div>
+    {#if browserSheet.arrow}
+        <div class="hint hint-up pointer-events-none absolute right-[92px] top-1.5 z-[1101]" aria-hidden="true">
+            <IconArrowDown font-size="34" />
+        </div>
+    {/if}
 {:else if $guideOpenStore === "mac-safari"}
     <!-- Mac Safari has no install button either: File, then Add to Dock. -->
     <div
@@ -273,6 +406,13 @@
         font-size: 12.5px;
         font-weight: 600;
         white-space: nowrap;
+    }
+    /* Chrome's own Install button in its window: blue, a pill. */
+    .chip-install {
+        background: #8ab4f8;
+        color: #202124;
+        border-radius: 999px;
+        padding: 0 14px;
     }
     .toggle {
         position: relative;

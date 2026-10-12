@@ -44,15 +44,52 @@ const install: BaseTranslation = {
             copied: "Link copied",
             notNow: "Not now",
         },
-        // After the browser's own install window was cancelled: it cannot open twice, so point at the browser's menu
+        // After the browser's own install window was cancelled (it cannot open twice): one guide per browser, in its own
+        // words. Bold parts are the buttons to tap.
         browserMenu: {
-            title: "Install Universe from your browser's menu",
-            androidStep1: "Tap <b>⋮</b> at the top right of your browser.",
-            androidStep2: "Tap <b>Install app</b>, then <b>Install</b>.",
-            desktopStep1: "Click <b>⋮</b> at the top right of your browser.",
-            desktopStep2:
-                "Choose <b>Install Universe</b>. In Edge: <b>Apps</b>, then <b>Install this site as an app</b>.",
-            gotIt: "Got it",
+            installButton: "Install",
+            chromeAndroid: {
+                title: "Install Universe from Chrome's menu",
+                step1: "Tap <b>⋮</b> next to the address bar.",
+                step2: "Tap <b>Install and create shortcut</b>.",
+                step2Older: "Older Chrome: Add to home screen",
+                step3: "Tap <b>Install</b>.",
+            },
+            edgeAndroid: {
+                title: "Install Universe from Edge's menu",
+                step1: "Tap <b>≡</b> in Edge's bar at the bottom.",
+                step2: "Tap <b>Add to phone</b>.",
+                step3: "Tap <b>Install</b>.",
+            },
+            samsungAndroid: {
+                title: "Install Universe from the browser's menu",
+                step1: "Tap <b>≡</b> at the bottom right.",
+                step2: "Tap <b>Add page to</b>, then <b>Home screen</b>.",
+                step3: "Tap <b>Install</b> (or <b>Add</b>).",
+            },
+            otherAndroid: {
+                title: "Install Universe from your browser's menu",
+                step1: "Open your browser's menu.",
+                step2: "Tap <b>Install app</b> or <b>Add to home screen</b>.",
+                step3: "Tap <b>Install</b>.",
+            },
+            chromeDesktop: {
+                title: "Install Universe from Chrome",
+                step1: "Click the <b>Install</b> icon at the right of the address bar.",
+                step2: "Click <b>Install</b>.",
+                noIcon: "No icon? Click <b>⋮</b>, then <b>Cast, save and share</b>, then <b>Install Universe</b>.",
+            },
+            edgeDesktop: {
+                title: "Install Universe from Edge",
+                step1: "Click the <b>App available</b> icon at the right of the address bar.",
+                step2: "Click <b>Install</b>.",
+                noIcon: "No icon? Click <b>…</b>, then <b>Apps</b>, then <b>Install this site as an app</b>.",
+            },
+            otherDesktop: {
+                title: "Install Universe from your browser",
+                step1: "Look for an <b>Install</b> icon at the right of the address bar, or open the browser's menu.",
+                step2: "Choose <b>Install</b>.",
+            },
         },
         macSafari: {
             title: "Add Universe to your Dock",

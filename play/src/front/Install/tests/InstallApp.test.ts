@@ -256,7 +256,7 @@ describe("InstallApp", () => {
             expect(get(app.canInstallStore)).toBe(true);
             await app.install("menu");
             expect(prompt).toHaveBeenCalledTimes(1);
-            expect(get(app.guideOpenStore)).toBe("browser-menu-android");
+            expect(get(app.guideOpenStore)).toBe("browser-chrome-android");
             app.closeGuide();
             expect(get(app.guideOpenStore)).toBeUndefined();
         });
@@ -266,7 +266,7 @@ describe("InstallApp", () => {
             win.fire("beforeinstallprompt", installEvent("dismissed").event);
             await app.install("menu");
             await app.install("menu");
-            expect(get(app.guideOpenStore)).toBe("browser-menu-desktop");
+            expect(get(app.guideOpenStore)).toBe("browser-chrome-desktop");
         });
 
         it("keeps the row when the browser's window fails to open", async () => {

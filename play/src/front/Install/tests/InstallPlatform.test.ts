@@ -81,9 +81,42 @@ describe("installGuideFor", () => {
 });
 
 describe("browserMenuGuideFor", () => {
-    it("tells Android from a computer", () => {
-        expect(browserMenuGuideFor(env(ANDROID_CHROME, { platform: "Linux armv81" }))).toBe("browser-menu-android");
-        expect(browserMenuGuideFor(env(MAC_CHROME, { platform: "MacIntel" }))).toBe("browser-menu-desktop");
+    const EDGE_ANDROID =
+        "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36 EdgA/130.0.0.0";
+    const EDGE_DESKTOP =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0";
+    const SAMSUNG =
+        "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/25.0 Chrome/121.0.0.0 Mobile Safari/537.36";
+    const OPERA_DESKTOP =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 OPR/115.0.0.0";
+    const OPERA_ANDROID =
+        "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36 OPR/85.0.0.0";
+
+    it("gives Chrome on Android and on a computer their own guide", () => {
+        expect(browserMenuGuideFor(env(ANDROID_CHROME, { platform: "Linux armv81" }))).toBe("browser-chrome-android");
+        expect(browserMenuGuideFor(env(MAC_CHROME, { platform: "MacIntel" }))).toBe("browser-chrome-desktop");
+    });
+
+    it("gives Edge its own guide, on a phone and on a computer", () => {
+        expect(browserMenuGuideFor(env(EDGE_ANDROID))).toBe("browser-edge-android");
+        expect(browserMenuGuideFor(env(EDGE_DESKTOP))).toBe("browser-edge-desktop");
+    });
+
+    it("gives Samsung Internet its own guide, though it says Chrome too", () => {
+        expect(browserMenuGuideFor(env(SAMSUNG))).toBe("browser-samsung-android");
+    });
+
+    it("gives Opera, Brave and the rest the general guide", () => {
+        expect(browserMenuGuideFor(env(OPERA_DESKTOP))).toBe("browser-other-desktop");
+        expect(browserMenuGuideFor(env(OPERA_ANDROID))).toBe("browser-other-android");
+        expect(browserMenuGuideFor(env(MAC_CHROME, { platform: "MacIntel", brave: true }))).toBe(
+            "browser-other-desktop"
+        );
+        expect(browserMenuGuideFor(env(ANDROID_CHROME, { brave: true }))).toBe("browser-other-android");
+    });
+
+    it("gives a browser that does not say Chrome the general guide", () => {
+        expect(browserMenuGuideFor(env(WINDOWS_FIREFOX, { platform: "Win32" }))).toBe("browser-other-desktop");
     });
 });
 

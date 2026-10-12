@@ -16,9 +16,18 @@ export type InstallGuide =
     | "open-in-safari"
     /** Mac, Safari 17 and later: File > Add to Dock. */
     | "mac-safari"
-    /** Chrome, Edge and Android browsers after the player cancelled their install window: it cannot open twice, so point at the browser's own menu. */
-    | "browser-menu-android"
-    | "browser-menu-desktop";
+    /**
+     * Chrome, Edge and Android browsers after the player cancelled their install window (it cannot open twice): one
+     * guide per browser that names its own buttons. Phones have no arrow (the bar can be at the top or the bottom);
+     * computers point at the install icon in the address bar.
+     */
+    | "browser-chrome-android"
+    | "browser-edge-android"
+    | "browser-samsung-android"
+    | "browser-other-android"
+    | "browser-chrome-desktop"
+    | "browser-edge-desktop"
+    | "browser-other-desktop";
 
 export interface InstallEnvironment {
     userAgent: string;
@@ -28,6 +37,8 @@ export interface InstallEnvironment {
     displayModeInstalled: boolean;
     /** Safari's own flag for a home screen app. */
     navigatorStandalone: boolean;
+    /** Brave hides itself in the user agent, but has `navigator.brave`. */
+    brave?: boolean;
 }
 
 /** Whether the game already runs as an installed app. */
@@ -73,10 +84,21 @@ export function currentInstallEnvironment(): InstallEnvironment {
         displayModeInstalled:
             matches("(display-mode: standalone)") || matches("(display-mode: window-controls-overlay)"),
         navigatorStandalone: (navigator as Navigator & { standalone?: boolean }).standalone === true,
+        brave: (navigator as Navigator & { brave?: unknown }).brave !== undefined,
     };
 }
 
 /** The guide for the browser's own menu, for when its install window was cancelled and cannot open again. */
-export function browserMenuGuideFor(env: InstallEnvironment): Extract<InstallGuide, `browser-menu-${string}`> {
-    return /Android/.test(env.userAgent) ? "browser-menu-android" : "browser-menu-desktop";
+export function browserMenuGuideFor(env: InstallEnvironment): Extract<InstallGuide, `browser-${string}`> {
+    const ua = env.userAgent;
+    const platform = /Android/.test(ua) ? "android" : "desktop";
+    let browser: "chrome" | "edge" | "samsung" | "other";
+    if (/EdgA\/|Edg\//.test(ua)) browser = "edge";
+    else if (/SamsungBrowser\//.test(ua)) browser = "samsung";
+    // Opera, Brave and the rest differ in their menus: one general guide.
+    else if (/OPR\//.test(ua) || env.brave === true || !/Chrome\//.test(ua)) browser = "other";
+    else browser = "chrome";
+    if (platform === "android") return `browser-${browser}-android`;
+    // Samsung Internet is a phone browser only.
+    return browser === "samsung" ? "browser-other-desktop" : `browser-${browser}-desktop`;
 }
