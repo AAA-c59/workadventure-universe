@@ -62,13 +62,7 @@ export function buildWebManifest(metaTagsData: RequiredMetaTagsData, pageUrl: st
                 short_name: metaTagsData.shortAppName,
                 description: metaTagsData.description,
                 url: "/",
-                icons: [
-                    {
-                        src: "/static/images/favicons/android-icon-192x192.png",
-                        sizes: "192x192",
-                        type: "image/png",
-                    },
-                ],
+                icons: metaTagsData.manifestIcons,
             },
         ],
         description: metaTagsData.description,

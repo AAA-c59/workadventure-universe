@@ -63,6 +63,12 @@ describe("buildWebManifest", () => {
         expect(manifest.scope).toBe("/");
     });
 
+    it("gives the shortcut the same Universe icons as the app, never the old WorkAdventure picture", () => {
+        const [shortcut] = manifest.shortcuts;
+        expect(shortcut.icons).toEqual(meta.manifestIcons);
+        expect(JSON.stringify(manifest)).not.toContain("android-icon-192x192");
+    });
+
     it("lists only its own manifest as a related app, never workadventu.re's", () => {
         expect(buildWebManifest(meta, "https://play.test/@/bawes/lobby/main").related_applications).toEqual([
             {
