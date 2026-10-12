@@ -190,4 +190,41 @@ describe("UsernameDisplay", () => {
         expect(layer.container.querySelector(".username-display")).toBeNull();
         expect(layer.clients.has(display)).toBe(false);
     });
+
+    describe("reduced motion", () => {
+        const animate = vi.fn(() => ({ cancel: vi.fn(), finished: Promise.resolve(), onfinish: null }));
+
+        const setReducedMotion = (reduce: boolean): void => {
+            vi.stubGlobal(
+                "matchMedia",
+                vi.fn(() => ({ matches: reduce }))
+            );
+        };
+
+        beforeEach(() => {
+            animate.mockClear();
+            Object.defineProperty(HTMLElement.prototype, "animate", { value: animate, configurable: true, writable: true });
+        });
+
+        afterEach(() => {
+            vi.unstubAllGlobals();
+            Reflect.deleteProperty(HTMLElement.prototype, "animate");
+        });
+
+        it("plays no animation for a status change or the megaphone when the player asked for reduced motion", () => {
+            setReducedMotion(true);
+            display.setAvailabilityStatus(AvailabilityStatus.AWAY);
+            display.setMegaphone(true);
+            expect(animate).not.toHaveBeenCalled();
+            expect(pill().querySelector<HTMLImageElement>("img")?.style.display).toBe("");
+            expect(display.getAvailabilityStatus()).toBe(AvailabilityStatus.AWAY);
+        });
+
+        it("animates a status change and the megaphone otherwise", () => {
+            setReducedMotion(false);
+            display.setAvailabilityStatus(AvailabilityStatus.AWAY);
+            display.setMegaphone(true);
+            expect(animate).toHaveBeenCalledTimes(2);
+        });
+    });
 });

@@ -1,3 +1,4 @@
+import { prefersReducedMotion } from "./prefersReducedMotion";
 import { MEGAPHONE_ICON_SIZE, PLAYER_NAME_GAP } from "./UsernameDisplaySizes";
 
 const ANIMATION_DURATION = 350;
@@ -64,7 +65,7 @@ export class UsernameMegaphoneDisplay {
         this.stopAnimation();
         this.shown = show;
 
-        if (instant || typeof this.element.animate !== "function") {
+        if (instant || typeof this.element.animate !== "function" || prefersReducedMotion()) {
             this.element.style.display = show ? "" : "none";
             this.element.style.opacity = show ? "1" : "0";
             return;

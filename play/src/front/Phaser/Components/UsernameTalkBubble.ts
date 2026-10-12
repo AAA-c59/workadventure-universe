@@ -1,3 +1,4 @@
+import { prefersReducedMotion } from "./prefersReducedMotion";
 import {
     TALK_BUBBLE_DOT_SIZE,
     TALK_BUBBLE_HEIGHT,
@@ -97,13 +98,5 @@ export class UsernameTalkBubble {
     private stopAnimation(): void {
         this.animation?.cancel();
         this.animation = undefined;
-    }
-}
-
-function prefersReducedMotion(): boolean {
-    try {
-        return typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    } catch {
-        return false;
     }
 }

@@ -1,5 +1,6 @@
 import { AvailabilityStatus } from "@workadventure/messages";
 import { getColorOfStatus } from "../../Utils/AvailabilityStatus";
+import { prefersReducedMotion } from "./prefersReducedMotion";
 import { STATUS_DOT_BORDER_WIDTH, STATUS_DOT_SIZE } from "./UsernameDisplaySizes";
 
 const colorNumberToHex = (color: number): string => `#${color.toString(16).padStart(6, "0")}`;
@@ -37,7 +38,7 @@ export class UsernameStatusDisplay {
         }
 
         this.availabilityStatusValue = availabilityStatus;
-        if (instant || typeof this.element.animate !== "function") {
+        if (instant || typeof this.element.animate !== "function" || prefersReducedMotion()) {
             this.stopAnimation();
             this.redraw();
             return;
