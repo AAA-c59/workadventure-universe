@@ -92,9 +92,13 @@
         }
     }
 
-    /** A picture opens in the picture viewer, as an uploaded picture does. The link in the message text stays a link. */
+    /**
+     * A plain click on a picture opens the picture viewer, as an uploaded picture does. A Ctrl, Cmd, Shift or Alt click
+     * is the way to open a link elsewhere, so it follows the link into a new tab. The link in the message text stays a link.
+     */
     function openPicture(event: MouseEvent) {
         if (link?.kind !== "image") return;
+        if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
         event.preventDefault();
         pictureOpen = true;
     }
