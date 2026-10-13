@@ -1,6 +1,7 @@
 <script lang="ts">
     /* eslint-disable svelte/no-at-html-tags */
     import { fly } from "svelte/transition";
+    import type { TransitionConfig } from "svelte/transition";
     import { LL } from "../../../i18n/i18n-svelte";
     import { installApp } from "../../Install/InstallWiring";
     import { installIconSrc } from "../../Install/InstallIcon";
@@ -152,8 +153,15 @@
         if (dragStartY === undefined) return;
         const farEnough = sheet !== undefined && dragY > sheet.offsetHeight / 2;
         dragStartY = undefined;
-        dragY = 0;
+        // Closing keeps the sheet where the finger left it, so it leaves from there: the offset is cleared once it is gone.
         if (farEnough) installApp.closeGuide();
+        else dragY = 0;
+    }
+
+    // The sheet leaves downwards from where it is: from where the finger let go after a swipe, else from its place.
+    function sheetOut(_node: Element): TransitionConfig {
+        const from = dragY;
+        return { duration: 300, css: (t) => `transform: translateY(${from + (1 - t) * 80}px); opacity: ${t};` };
     }
 
     let copied = false;
@@ -185,7 +193,9 @@
         role="dialog"
         aria-label={iosGuide.text.title()}
         data-testid="install-guide"
-        transition:fly={{ y: 80, duration: 300 }}
+        in:fly={{ y: 80, duration: 300 }}
+        out:sheetOut
+        on:outroend={() => (dragY = 0)}
     >
         <div
             class="drag-zone"
