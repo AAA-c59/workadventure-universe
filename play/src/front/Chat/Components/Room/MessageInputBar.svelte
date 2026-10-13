@@ -27,7 +27,6 @@
     import { emoteMenuStore } from "../../../Stores/EmoteStore";
     import LazyEmote from "../../../Components/EmoteMenu/LazyEmote.svelte";
     import { composerDraftStore } from "../../Stores/ComposerDraftStore";
-    import { appendEmoji } from "./AppendEmoji";
     import { draftMessageService } from "../../Services/DraftMessageService";
     import { localUserStore } from "../../../Connection/LocalUserStore";
     import { MatrixChatRoom } from "../../Connection/Matrix/MatrixChatRoom";
@@ -35,6 +34,7 @@
     import ComposerLinkPreview from "../../LinkPreview/ComposerLinkPreview.svelte";
     import GifPicker from "../../Gif/GifPicker.svelte";
     import { withoutPreview } from "../../LinkPreview/ChatLinks";
+    import { appendEmoji } from "./AppendEmoji";
     import MessageInput from "./MessageInput.svelte";
     import ReplyPreview from "./MessageActions/ReplyPreview.svelte";
     import { captureSendDestination, isSendDestinationOpen, spaceGenerationOf } from "./SendDestination";
