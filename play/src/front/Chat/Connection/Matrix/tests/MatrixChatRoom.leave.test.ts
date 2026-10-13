@@ -53,9 +53,9 @@ describe("MatrixChatRoom.leaveRoom", () => {
     let leave: ReturnType<typeof vi.fn>;
     let forget: ReturnType<typeof vi.fn>;
 
-    function build(): MatrixChatRoom {
+    function build(roomId = "!dm:matrix.test"): MatrixChatRoom {
         const room = {
-            roomId: "!dm:matrix.test",
+            roomId,
             name: "DM",
             myUserId: "@me:matrix.test",
             client: {
@@ -127,6 +127,24 @@ describe("MatrixChatRoom.leaveRoom", () => {
             expect(forget).toHaveBeenLastCalledWith("!dm:matrix.test");
             await vi.advanceTimersByTimeAsync(60_000);
             expect(forget).toHaveBeenCalledTimes(2);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it("shares one retry between chats deleted together, so they do not use up each other's tries", async () => {
+        vi.useFakeTimers();
+        try {
+            localStorage.clear();
+            forget.mockImplementation(() => Promise.reject(new Error("offline")));
+
+            await build("!a:matrix.test").leaveRoom({ forget: true });
+            await build("!b:matrix.test").leaveRoom({ forget: true });
+            expect(forget).toHaveBeenCalledTimes(2);
+
+            await vi.advanceTimersByTimeAsync(60_000);
+            // One retry pass tried both; a timer each would have gone through the list twice.
+            expect(forget).toHaveBeenCalledTimes(4);
         } finally {
             vi.useRealTimers();
         }

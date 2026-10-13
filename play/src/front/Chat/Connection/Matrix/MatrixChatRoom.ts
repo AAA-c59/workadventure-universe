@@ -60,6 +60,8 @@ import { forgetRememberedRooms, rememberRoomToForget } from "./roomsToForget";
 const INVITE_WITHDRAWAL_DEADLINE_MS = 3000;
 /** A room that was left but could not be forgotten is tried again after this long (and at every start and reconnect). */
 const FORGET_RETRY_DELAY_MS = 10_000;
+/** One retry is waiting per account: several deleted chats share it, so they do not use up each other's tries. */
+const forgetRetryTimers = new Set<string>();
 
 /** Events asked from the server per request while loading earlier messages. */
 const PREVIOUS_EVENTS_PAGE_SIZE = 30;
@@ -660,7 +662,10 @@ export class MatrixChatRoom
             console.warn("Left the room but could not forget it, trying again later", error);
             const userId = client.getSafeUserId();
             rememberRoomToForget(userId, this.id);
+            if (forgetRetryTimers.has(userId)) return;
+            forgetRetryTimers.add(userId);
             setTimeout(() => {
+                forgetRetryTimers.delete(userId);
                 forgetRememberedRooms(client, userId).catch((retryError: unknown) =>
                     console.warn("Could not forget the rooms that were left", retryError)
                 );
