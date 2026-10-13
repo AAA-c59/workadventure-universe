@@ -18,7 +18,7 @@ const install: BaseTranslation = {
         // Steps, in the words of the browser: bold parts are the buttons to tap
         iphoneSafari: {
             title: "Add Universe to your Home Screen",
-            step1: "Tap <b>⋯</b> in Safari's bar below. Older iPhones: tap Share.",
+            step1: "Tap <b>⋯</b> in your browser's bar. Older iPhones: tap Share.",
             step2: "Tap <b>Share</b>, then <b>Add to Home Screen</b>.",
             step3: "Keep <b>Open as Web App</b> on, then tap <b>Add</b>.",
         },

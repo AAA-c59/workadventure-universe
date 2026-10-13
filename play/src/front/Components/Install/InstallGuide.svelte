@@ -135,6 +135,27 @@
     }
     $: browserSheet = browserSheetFor($guideOpenStore, $LL.install.guide.browserMenu);
 
+    // Dragging the handle down closes the sheet: past half of its height it goes, less and it springs back.
+    let sheet: HTMLDivElement | undefined;
+    let dragStartY: number | undefined;
+    let dragY = 0;
+    function dragStart(event: PointerEvent) {
+        dragStartY = event.clientY;
+        dragY = 0;
+        (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    }
+    function dragMove(event: PointerEvent) {
+        if (dragStartY === undefined) return;
+        dragY = Math.max(0, event.clientY - dragStartY);
+    }
+    function dragEnd() {
+        if (dragStartY === undefined) return;
+        const farEnough = sheet !== undefined && dragY > sheet.offsetHeight / 2;
+        dragStartY = undefined;
+        dragY = 0;
+        if (farEnough) installApp.closeGuide();
+    }
+
     let copied = false;
     let copiedTimer: ReturnType<typeof setTimeout> | undefined;
     async function copyLink() {
@@ -150,19 +171,32 @@
 </script>
 
 {#if iosGuide !== undefined}
-    <!-- iPhone and iPad: a sheet above the browser's bar, and an arrow bouncing over the button to tap first. Safari
-         on iPhone has Share behind ⋯ in its bottom bar (iOS 26); Chrome and Safari on iPad have it at the top right. -->
+    <!-- iPhone and iPad: a sheet at the bottom of the page, over the game's buttons. Chrome and Safari on iPad have a
+         yellow arrow bouncing over Share at the top right. Safari on iPhone has none: its ⋯ button is in the browser's
+         bar, which the page cannot see (it may be at the bottom, at the top or hidden). Swipe the handle down to close. -->
     <div
-        class="u-surface pointer-events-auto absolute inset-x-2 z-[1100] mx-auto flex max-w-[440px] flex-col gap-3 rounded-3xl px-4 pb-4 pt-2.5 text-white {$guideOpenStore ===
+        bind:this={sheet}
+        class="ios-sheet u-surface pointer-events-auto absolute inset-x-2 z-[1100] mx-auto flex max-w-[440px] flex-col gap-3 rounded-3xl px-4 pb-4 pt-2.5 text-white {$guideOpenStore ===
         'iphone-safari'
-            ? 'bottom-[86px]'
+            ? 'bottom-2'
             : 'bottom-6'}"
+        class:sheet-dragging={dragStartY !== undefined}
+        style:transform={dragY > 0 ? `translateY(${dragY}px)` : undefined}
         role="dialog"
         aria-label={iosGuide.text.title()}
         data-testid="install-guide"
         transition:fly={{ y: 80, duration: 300 }}
     >
-        <div class="mx-auto h-[5px] w-10 rounded-full bg-white/25" aria-hidden="true" />
+        <div
+            class="drag-zone"
+            data-testid="install-guide-handle"
+            on:pointerdown={dragStart}
+            on:pointermove={dragMove}
+            on:pointerup={dragEnd}
+            on:pointercancel={dragEnd}
+        >
+            <div class="mx-auto h-[5px] w-10 rounded-full bg-white/25" aria-hidden="true" />
+        </div>
         <div class="flex items-center gap-3">
             {#if iconSrc}
                 <img class="h-12 w-12 flex-none rounded-[22%]" src={iconSrc} alt="" />
@@ -213,11 +247,7 @@
             {$LL.install.guide.alreadyAdded()}
         </p>
     </div>
-    {#if $guideOpenStore === "iphone-safari"}
-        <div class="hint pointer-events-none absolute bottom-[70px] right-[18px] z-[1101]" aria-hidden="true">
-            <IconArrowDown font-size="34" />
-        </div>
-    {:else}
+    {#if $guideOpenStore !== "iphone-safari"}
         <div
             class="hint hint-up pointer-events-none absolute right-[58px] top-[98px] z-[1101] md:right-[72px] md:top-14"
             aria-hidden="true"
@@ -391,6 +421,20 @@
 {/if}
 
 <style>
+    /* The sheet follows the finger while its handle is dragged, and springs back when let go too early. The zone is a
+       wider, taller target than the 5px handle it holds, and keeps the page from scrolling under the finger. */
+    .ios-sheet {
+        transition: transform 0.25s ease;
+    }
+    .ios-sheet.sheet-dragging {
+        transition: none;
+    }
+    .drag-zone {
+        margin: -10px -16px -12px;
+        padding: 10px 16px 12px;
+        cursor: grab;
+        touch-action: none;
+    }
     /* What the browser draws (a button in its bar, a switch): light and in its own look, so it reads as the thing to
        find there, not as part of the game. */
     .chip {
