@@ -79,8 +79,8 @@ export const openDirectChatRoom = async (chatID: string) => {
         // There is no chat with yourself (another of your tabs or devices has your chat id).
         if (chatID === localUserStore.getChatId()) return;
         const chatConnection = await gameManager.getChatConnection();
-        let room = chatConnection.getDirectRoomFor(chatID);
-        if (!room) room = await chatConnection.createDirectRoom(chatID);
+        // Finds the chat that exists (inviting the person back if they deleted it) and only makes one when there is none.
+        const room = await chatConnection.createDirectRoom(chatID);
         if (!room) throw new Error("Failed to create room");
         analyticsClient.createMatrixRoom();
 

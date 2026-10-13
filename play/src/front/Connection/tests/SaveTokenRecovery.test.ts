@@ -28,9 +28,9 @@ vi.mock("../../WebRtc/HtmlUtils", () => ({ HtmlUtils: {} }));
 import { connectionManager } from "../ConnectionManager";
 import { localUserStore } from "../LocalUserStore";
 
-/** A game token as the store reads it: three parts, the middle one a JSON payload. */
+/** A signed-in player's game token as the store reads it: three parts, the middle one a JSON payload. */
 function gameToken(label: string): string {
-    return `header.${window.btoa(JSON.stringify({ label }))}.signature`;
+    return `header.${window.btoa(JSON.stringify({ label, accessToken: "access" }))}.signature`;
 }
 
 const OLD_TOKEN = gameToken("old");
@@ -44,10 +44,11 @@ function httpError(status: number) {
     });
 }
 
-const SAVES: [string, () => Promise<boolean>][] = [
-    ["saveName", () => connectionManager.saveName("Ali")],
-    ["saveTextures", () => connectionManager.saveTextures(["body"])],
-    ["saveCompanionTexture", () => connectionManager.saveCompanionTexture("dog")],
+// The name save answers true or false; the WOKA and the companion saves say what happened (saved, refused, failed).
+const SAVES: [string, () => Promise<unknown>, unknown, unknown][] = [
+    ["saveName", () => connectionManager.saveName("Ali"), true, false],
+    ["saveTextures", () => connectionManager.saveTextures(["body"]), "saved", "failed"],
+    ["saveCompanionTexture", () => connectionManager.saveCompanionTexture("dog"), "saved", "failed"],
 ];
 
 describe("a save that gets a 401", () => {
@@ -61,11 +62,11 @@ describe("a save that gets a 401", () => {
 
     // The recovery asks /me for a new token with only an Authorization header, but /me needs the token as a query
     // parameter, so it answers 400 (and with the parameter it would check the very same game token). #833
-    it.each(SAVES)("%s: gives up when /me refuses, and keeps the token it had", async (_name, save) => {
+    it.each(SAVES)("%s: gives up when /me refuses, and keeps the token it had", async (_name, save, _ok, failed) => {
         mocks.post.mockRejectedValueOnce(httpError(401));
         mocks.get.mockRejectedValueOnce(httpError(400));
 
-        expect(await save()).toBe(false);
+        expect(await save()).toBe(failed);
 
         expect(mocks.get).toHaveBeenCalledTimes(1);
         expect(mocks.post).toHaveBeenCalledTimes(1);
@@ -74,7 +75,7 @@ describe("a save that gets a 401", () => {
     });
 
     // Not reachable today (above); if /me ever does hand out a token, it is kept for the next room change as well.
-    it.each(SAVES)("%s: a token it recovers is stored too, not only kept in memory", async (_name, save) => {
+    it.each(SAVES)("%s: a token it recovers is stored too, not only kept in memory", async (_name, save, ok) => {
         mocks.post.mockRejectedValueOnce(httpError(401)).mockResolvedValueOnce({});
         mocks.get.mockResolvedValueOnce({
             data: {
@@ -86,7 +87,7 @@ describe("a save that gets a 401", () => {
             },
         });
 
-        expect(await save()).toBe(true);
+        expect(await save()).toBe(ok);
 
         expect(localUserStore.getAuthToken()).toBe(FRESH_TOKEN);
         expect((connectionManager as unknown as { authToken: string }).authToken).toBe(FRESH_TOKEN);

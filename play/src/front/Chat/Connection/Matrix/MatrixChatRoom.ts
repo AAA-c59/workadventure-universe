@@ -53,9 +53,15 @@ import { MatrixChatRoomMember } from "./MatrixChatRoomMember";
 import { isInvitationGoneError } from "./isInvitationGoneError";
 import { changingMatrixAvatarStore } from "./MatrixMedia";
 import { lastMessageTimestamp } from "./lastMessageTimestamp";
+import { saveDirectRooms } from "./directRooms";
+import { forgetRememberedRooms, rememberRoomToForget } from "./roomsToForget";
 
 /** How long leaving waits for pending invitations to be withdrawn before it leaves anyway. */
 const INVITE_WITHDRAWAL_DEADLINE_MS = 3000;
+/** A room that was left but could not be forgotten is tried again after this long (and at every start and reconnect). */
+const FORGET_RETRY_DELAY_MS = 10_000;
+/** One retry is waiting per account: several deleted chats share it, so they do not use up each other's tries. */
+const forgetRetryTimers = new Set<string>();
 
 /** Events asked from the server per request while loading earlier messages. */
 const PREVIOUS_EVENTS_PAGE_SIZE = 30;
@@ -602,8 +608,16 @@ export class MatrixChatRoom
     }
 
     async joinRoom(): Promise<void> {
+        // Read before joining: the invite carries the direct flag, which the joined room may lose later.
+        const dmInviter = this.matrixRoom.getDMInviter();
         try {
             await this.matrixRoom.client.joinRoom(this.id);
+            if (dmInviter) {
+                // The person who started the chat listed it; the one who accepts lists it too, or the chat turns into a group.
+                saveDirectRooms(this.matrixRoom.client, [{ userId: dmInviter, roomId: this.id }]).catch(
+                    (error: unknown) => console.warn("Unable to list the chat as a direct chat", error)
+                );
+            }
             return;
         } catch (error) {
             console.error("Unable to join", error);
@@ -619,7 +633,7 @@ export class MatrixChatRoom
         }
     }
 
-    async leaveRoom(): Promise<void> {
+    async leaveRoom(options: { forget?: boolean } = {}): Promise<void> {
         try {
             if (this.matrixRoom.getMyMembership() === KnownMembership.Join) {
                 // Bounded: a slow member load or kick must not keep the user in the room.
@@ -635,11 +649,28 @@ export class MatrixChatRoom
                 clearTimeout(deadline);
             }
             await this.matrixRoom.client.leave(this.id);
-            return;
         } catch (error) {
             console.error("Unable to leave", error);
             throw new Error("Failed to leave room", { cause: error });
         }
+        if (!options.forget) return;
+        // Left already: forgetting is what removes the room from every app for good. A failure here must not undo the
+        // leave, so the chat is still deleted for this person; the room is written down and forgotten again soon, and
+        // at the next start, so it does not stay in Element as an empty room.
+        const client = this.matrixRoom.client;
+        await client.forget(this.id).catch((error: unknown) => {
+            console.warn("Left the room but could not forget it, trying again later", error);
+            const userId = client.getSafeUserId();
+            rememberRoomToForget(userId, this.id);
+            if (forgetRetryTimers.has(userId)) return;
+            forgetRetryTimers.add(userId);
+            setTimeout(() => {
+                forgetRetryTimers.delete(userId);
+                forgetRememberedRooms(client, userId).catch((retryError: unknown) =>
+                    console.warn("Could not forget the rooms that were left", retryError)
+                );
+            }, FORGET_RETRY_DELAY_MS);
+        });
     }
 
     /**

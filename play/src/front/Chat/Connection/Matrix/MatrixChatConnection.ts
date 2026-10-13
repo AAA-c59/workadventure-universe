@@ -16,6 +16,8 @@ import type {
 import {
     ClientEvent,
     CryptoEvent,
+    Direction,
+    Filter,
     EventTimeline,
     EventType,
     MatrixError,
@@ -58,8 +60,13 @@ import { MatrixRoomFolder } from "./MatrixRoomFolder";
 import { clearMatrixMedia } from "./MatrixMedia";
 import { chatUserFactory, mapMatrixPresenceToAvailabilityStatus, toChatPresence } from "./MatrixChatUser";
 import { WokaAvatarSaver, wokaIdentity } from "./MatrixWokaAvatar";
+import type { DirectMap, DirectRoomCandidate } from "./directRooms";
+import { forgetRememberedRooms } from "./roomsToForget";
+import { directInviterOf, holdsTheRoom, isListedAsDirect, pickChatWithPerson, saveDirectRooms } from "./directRooms";
 
 const CLIENT_NOT_INITIALIZED_ERROR_MSG = "MatrixClient not yet initialized";
+/** How long opening a chat waits for the first sync, so that a chat that exists is found before a new one is made. */
+const ROOM_LIST_WAIT_MS = 8000;
 // The one default woka (shared with the game), so the chat never mistakes it for a chosen woka.
 export { defaultWoka };
 export const defaultColor = "#626262";
@@ -90,6 +97,11 @@ export class MatrixChatConnection implements ChatConnectionInterface {
     isGuest: Writable<boolean> = writable(false);
     hasUnreadMessages: Readable<boolean>;
     roomCreationInProgress: Writable<boolean> = writable(false);
+    /** Opening a chat with someone is one at a time per person: pressing Message twice finds the same request. */
+    private directRoomRequests = new Map<string, Promise<(ChatRoom & ChatRoomMembershipManagement) | undefined>>();
+    private roomCreationsRunning = 0;
+    /** Rooms whose first invite was already read this session, so each is looked at once. */
+    private invitesChecked = new Set<string>();
     roomFolders: MapStore<MatrixRoomFolder["id"], MatrixRoomFolder> = new MapStore<
         MatrixRoomFolder["id"],
         MatrixRoomFolder
@@ -253,6 +265,16 @@ export class MatrixChatConnection implements ChatConnectionInterface {
         });
     }
 
+    /** Forgets the chats this account deleted but could not forget at the time (see `roomsToForget`). */
+    private forgetLeftRooms(): void {
+        const client = this.client;
+        const userId = client?.getUserId();
+        if (!client || !userId) return;
+        forgetRememberedRooms(client, userId).catch((error: unknown) => {
+            console.warn("Could not forget the rooms that were left", error);
+        });
+    }
+
     private onUserPresenceEvent(event: MatrixEvent | undefined, user: User): void {
         const userStatus = get(this.usersStatus).get(user.userId);
         const newStatus = mapMatrixPresenceToAvailabilityStatus(user.presence);
@@ -271,6 +293,8 @@ export class MatrixChatConnection implements ChatConnectionInterface {
                     this.isClientReady = true;
                     this._ignoredUsers.set(this.client.getIgnoredUsers());
                     this.startSavingWokaAsAvatar();
+                    this.repairDirectAccountData();
+                    this.forgetLeftRooms();
                     break;
                 case SyncState.Error:
                     this.connectionStatus.set("ON_ERROR");
@@ -289,6 +313,8 @@ export class MatrixChatConnection implements ChatConnectionInterface {
                     if (get(this.connectionStatus) !== "ONLINE" && this.isClientReady) {
                         this.connectionStatus.set("ONLINE");
                     }
+                    // The connection is back: chats that were left but not forgotten while it was down are forgotten now.
+                    if (prevState === SyncState.Error || prevState === SyncState.Reconnecting) this.forgetLeftRooms();
                     break;
             }
         });
@@ -409,6 +435,7 @@ export class MatrixChatConnection implements ChatConnectionInterface {
     private onAccountDataEvent(event: MatrixEvent) {
         if (event.getType() === EventType.Direct) {
             this.refreshRoomTypes();
+            this.repairDirectAccountData();
         }
         if (event.getType() === EventType.IgnoredUserList) {
             this._ignoredUsers.set(this.client?.getIgnoredUsers() ?? []);
@@ -440,7 +467,7 @@ export class MatrixChatConnection implements ChatConnectionInterface {
     /**
      * A chat's type (direct or group) is decided when it is created, but the account's list of direct chats can arrive
      * after the chat itself. Chats that turn out to be direct are made again, so they show the person and not the
-     * chat account's name (#834).
+     * chat account's name (#834). Chats inside folders are made again in the same folder (#853).
      */
     private refreshRoomTypes(): void {
         for (const room of Array.from(this.roomList.values())) {
@@ -450,6 +477,33 @@ export class MatrixChatConnection implements ChatConnectionInterface {
             this.roomList.delete(room.id);
             this.createAndAddNewRootRoom(matrixRoom);
         }
+
+        for (const folder of Array.from(this.roomFolders.values())) {
+            this.refreshRoomTypesInFolder(folder);
+        }
+    }
+
+    private refreshRoomTypesInFolder(folder: MatrixRoomFolder): void {
+        for (const room of Array.from(folder.roomList.values())) {
+            if (!room.hasOutdatedType()) continue;
+            const matrixRoom = this.client?.getRoom(room.id);
+            if (!matrixRoom) continue;
+            // A folder's room list does not destroy chats it drops, unlike the main list
+            room.destroy();
+            const newRoom = this.createChatRoom(matrixRoom);
+            folder.roomList.set(newRoom.id, newRoom);
+            if (get(selectedRoomStore)?.id === newRoom.id) {
+                selectedRoomStore.set(newRoom);
+            }
+        }
+
+        for (const subFolder of Array.from(folder.folderList.values())) {
+            this.refreshRoomTypesInFolder(subFolder);
+        }
+    }
+
+    private createChatRoom(room: Room): MatrixChatRoom {
+        return new MatrixChatRoom(room);
     }
 
     private onRoomNameEvent(room: Room): void {
@@ -940,11 +994,38 @@ export class MatrixChatConnection implements ChatConnectionInterface {
             return Promise.reject(new Error("There is no direct chat with yourself"));
         }
 
+        // Two presses on Message, or both people pressing it at once on this device, must not make two rooms.
+        const running = this.directRoomRequests.get(userToInvite);
+        if (running) return running;
+
+        const request = this.openOrCreateDirectRoom(userToInvite).finally(() => {
+            this.directRoomRequests.delete(userToInvite);
+        });
+        this.directRoomRequests.set(userToInvite, request);
+        return request;
+    }
+
+    /**
+     * The chat with that person: the one already there (the other person is invited back into it when they deleted
+     * it), and only when there is none, a new one.
+     */
+    private async openOrCreateDirectRoom(
+        userToInvite: string
+    ): Promise<(ChatRoom & ChatRoomMembershipManagement) | undefined> {
+        const client = this.client;
+        if (!client) throw new Error(CLIENT_NOT_INITIALIZED_ERROR_MSG);
+        // Before the first sync is over the room list is still being filled, and a chat that exists would not be found.
+        await this.waitForRoomList();
+
         const existingDirectRoom = this.getDirectRoomFor(userToInvite);
 
-        if (existingDirectRoom) return existingDirectRoom;
+        if (existingDirectRoom) {
+            await this.bringPartnerBack(existingDirectRoom, userToInvite);
+            this.listAsDirect(userToInvite, existingDirectRoom.id);
+            return existingDirectRoom;
+        }
 
-        this.roomCreationInProgress.set(true);
+        this.startRoomCreation();
 
         const createRoomOptions = {
             //TODO not clean code
@@ -955,7 +1036,7 @@ export class MatrixChatConnection implements ChatConnectionInterface {
         } as CreateRoomOptions;
 
         try {
-            const { room_id } = await this.client.createRoom({
+            const { room_id } = await client.createRoom({
                 visibility: "private" as Visibility | undefined,
                 // Both people get the same power level, so neither can delete the other's messages from any app.
                 preset: Preset.TrustedPrivateChat,
@@ -969,32 +1050,165 @@ export class MatrixChatConnection implements ChatConnectionInterface {
             //Wait Sync Event before use/update roomList otherwise room not exist in the client
             await this.waitForNextSync();
 
-            const room = this.client.getRoom(room_id);
+            const room = client.getRoom(room_id);
             if (!room) return;
             return this.createAndAddNewRootRoom(room);
         } catch (error) {
             throw this.handleMatrixError(error);
         } finally {
-            this.roomCreationInProgress.set(false);
+            this.endRoomCreation();
         }
+    }
+
+    private startRoomCreation(): void {
+        this.roomCreationsRunning++;
+        this.roomCreationInProgress.set(true);
+    }
+
+    private endRoomCreation(): void {
+        this.roomCreationsRunning = Math.max(0, this.roomCreationsRunning - 1);
+        if (this.roomCreationsRunning === 0) this.roomCreationInProgress.set(false);
+    }
+
+    /** Waits (a few seconds at most) for the first sync, when the chats of the account are loaded. */
+    private async waitForRoomList(): Promise<void> {
+        if (this.isClientReady || get(this.connectionStatus) !== "CONNECTING") return;
+        await new Promise<void>((resolve) => {
+            const waiting: { unsubscribe?: Unsubscriber; timer?: ReturnType<typeof setTimeout>; done: boolean } = {
+                done: false,
+            };
+            const finish = () => {
+                if (waiting.done) return;
+                waiting.done = true;
+                clearTimeout(waiting.timer);
+                waiting.unsubscribe?.();
+                resolve();
+            };
+            waiting.timer = setTimeout(finish, ROOM_LIST_WAIT_MS);
+            waiting.unsubscribe = this.connectionStatus.subscribe((status) => {
+                if (status !== "CONNECTING") finish();
+            });
+            // The status was already settled: the subscription ran before there was anything to unsubscribe.
+            if (waiting.done) waiting.unsubscribe();
+        });
+    }
+
+    /** When the other person deleted the chat but I still have it, they are invited back into the same room. */
+    private async bringPartnerBack(room: ChatRoom & ChatRoomMembershipManagement, userId: string): Promise<void> {
+        const partner = get(room.members).find((member) => member.id === userId);
+        if (!partner || get(partner.membership) !== "leave") return;
+        if (get(room.myMembership) !== "join" || !this.client) return;
+        this.startRoomCreation();
+        try {
+            await this.client.invite(room.id, userId);
+        } catch (error) {
+            throw this.handleMatrixError(error);
+        } finally {
+            this.endRoomCreation();
+        }
+    }
+
+    /** Lists the room as my chat with that person when the account's list does not say so yet. Best effort. */
+    private listAsDirect(userId: string, roomId: string): void {
+        if (!this.client || isListedAsDirect(this.directMap(), userId, roomId)) return;
+        this.addDMRoomInAccountData(userId, roomId).catch((error: unknown) => {
+            console.warn("Unable to list the chat as a direct chat", error);
+        });
+    }
+
+    private directMap(): DirectMap | undefined {
+        return this.client?.getAccountData(EventType.Direct)?.getContent<DirectMap>() ?? undefined;
+    }
+
+    /**
+     * Rooms that still carry the direct flag of the invite I accepted, but that the account's list does not hold,
+     * are added to it. Accepting an invite did not save it before, so those chats turn into groups when the flag is lost.
+     */
+    private repairDirectAccountData(): void {
+        const client = this.client;
+        if (!client) return;
+        const directMap = this.directMap();
+        const missing: { userId: string; roomId: string }[] = [];
+        const toCheck: string[] = [];
+        for (const room of this.roomList.values()) {
+            if (get(room.myMembership) !== KnownMembership.Join) continue;
+            const inviter = client.getRoom(room.id)?.getDMInviter();
+            if (inviter && inviter !== client.getUserId()) {
+                if (!isListedAsDirect(directMap, inviter, room.id)) missing.push({ userId: inviter, roomId: room.id });
+                continue;
+            }
+            // The sdk loses the direct flag of an invite when the person changes their profile, which the game
+            // does on every load. Rooms of at most two people that no direct list holds have their first invite read.
+            const listed = Object.values(directMap ?? {}).some((roomIds) => roomIds?.includes(room.id));
+            const holders = get(room.members).filter((member) => holdsTheRoom(get(member.membership))).length;
+            if (!listed && holders <= 2 && !this.invitesChecked.has(room.id)) toCheck.push(room.id);
+        }
+        if (missing.length > 0) {
+            saveDirectRooms(client, missing).catch((error: unknown) => {
+                console.warn("Unable to repair the list of direct chats", error);
+            });
+        }
+        if (toCheck.length > 0) this.repairFromFirstInvites(toCheck);
+    }
+
+    /** Reads the start of each room's history for the invite I accepted, and lists the rooms it says are direct chats. */
+    private repairFromFirstInvites(roomIds: string[]): void {
+        const client = this.client;
+        const myUserId = client?.getUserId();
+        if (!client || !myUserId) return;
+        for (const roomId of roomIds) this.invitesChecked.add(roomId);
+        const filter = new Filter(myUserId);
+        filter.setDefinition({ room: { timeline: { types: [EventType.RoomMember] } } });
+        Promise.all(
+            roomIds.map(async (roomId) => {
+                try {
+                    const { chunk } = await client.createMessagesRequest(roomId, null, 12, Direction.Forward, filter);
+                    const inviter = directInviterOf(chunk, myUserId);
+                    return inviter ? { userId: inviter, roomId } : undefined;
+                } catch (error) {
+                    // Looked at again on the next load.
+                    this.invitesChecked.delete(roomId);
+                    console.warn("Unable to read the first invite of", roomId, error);
+                    return undefined;
+                }
+            })
+        )
+            .then((found) => {
+                const direct = found.filter((entry) => entry !== undefined);
+                return direct.length > 0 ? saveDirectRooms(client, direct) : undefined;
+            })
+            .catch((error: unknown) => console.warn("Unable to repair the list of direct chats", error));
     }
 
     getDirectRoomFor(userID: string): (ChatRoom & ChatRoomMembershipManagement) | undefined {
         // You are a member of every direct room you have, so your own id would match the first one found.
         if (userID === this.client?.getUserId()) return undefined;
-        const directRooms = Array.from(this.roomList.values())
-            .filter((room) => {
-                const memberIDs = get(room.members)
-                    .filter((member) => member.id && ["join", "invite"].includes(get(member.membership)))
-                    .map((member) => member.id);
-                return (
-                    room.type === "direct" &&
-                    memberIDs.some((memberId) => memberId === userID && memberIDs.length === 2)
-                );
-            })
-            .map((room) => room);
-        if (directRooms.length > 0) return directRooms[0];
-        return undefined;
+        const directMap = this.directMap();
+        const candidates = Array.from(this.roomList.values()).map((room): DirectRoomCandidate<MatrixChatRoom> => {
+            const members = get(room.members);
+            const partnerMembership = members.find((member) => member.id === userID)?.membership;
+            const sdkRoom = this.client?.getRoom(room.id);
+            return {
+                room,
+                myMembership: get(room.myMembership),
+                // An invitation shows the person who invited me even when the rest of the room is not loaded yet.
+                partnerMembership: partnerMembership
+                    ? get(partnerMembership)
+                    : sdkRoom?.getDMInviter() === userID
+                    ? KnownMembership.Join
+                    : undefined,
+                othersHolding: members.filter(
+                    (member) =>
+                        member.id !== userID &&
+                        member.id !== this.client?.getUserId() &&
+                        ["join", "invite"].includes(get(member.membership))
+                ).length,
+                // Only what says "direct chat", never the number of members: a group of two stays a group.
+                looksDirect: room.type === "direct" || isListedAsDirect(directMap, userID, room.id),
+                lastActivity: room.lastMessageTimestamp,
+            };
+        });
+        return pickChatWithPerson(candidates);
     }
 
     userPresence(userChatId: string): Readable<ChatPresence> {
@@ -1160,9 +1374,7 @@ export class MatrixChatConnection implements ChatConnectionInterface {
         if (!this.client) {
             throw new Error(CLIENT_NOT_INITIALIZED_ERROR_MSG);
         }
-        const directMap: Record<string, string[]> = this.client.getAccountData("m.direct")?.getContent() || {};
-        directMap[userId] = [...(directMap[userId] || []), roomId];
-        await this.client.setAccountData("m.direct", directMap);
+        await saveDirectRooms(this.client, [{ userId, roomId }]);
     }
 
     async isUserExist(address: string): Promise<boolean> {

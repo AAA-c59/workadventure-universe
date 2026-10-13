@@ -7,23 +7,27 @@
     import WokaImage from "./WokaImage.svelte";
     import { getWokaTextureUrl } from "./WokaData";
     import type { WokaData } from "./WokaTypes";
-    import { IconChevronLeft, IconChevronRight, IconRotate, IconShuffle, IconX } from "@wa-icons";
+    import { IconAlertTriangle, IconChevronLeft, IconChevronRight, IconRotate, IconShuffle, IconX } from "@wa-icons";
 
     /**
      * The card both WOKA screens share (the picker and Build your WOKA): the spotlight preview with Rotate and
      * Randomize on the left, the title, the category pills and the tiles on the right, the buttons at the bottom.
-     * The tiles scroll down and the categories sideways; swiping the tiles sideways changes the category.
+     * The tiles scroll down and the categories sideways; swiping sideways anywhere under the pills changes the category.
      */
     export let eyebrow: string;
     export let title: string;
     export let selectedTextures: Record<string, string>;
+    /** An outfit from the server to show in the preview instead of `selectedTextures` (a Recent one): its pictures */
+    export let previewLayers: string[] | null = null;
+    /** Why the last Continue did not save: kept above the buttons, with the picker still open */
+    export let saveError = "";
     export let wokaData: WokaData | null;
     export let isLoading: boolean;
     export let error: string;
     export let retry: () => void;
     export let randomize: () => void;
     export let close: (() => void) | undefined = undefined;
-    /** The pills over the tiles (collections or parts), shown when there are two or more */
+    /** The pills over the tiles (collections or parts); one collection still shows its pill */
     export let categories: { label: string; count?: number; icon?: ComponentType }[] = [];
     export let category = 0;
     export let swipeHint = "";
@@ -40,7 +44,7 @@
         direction = turnOrder[turn];
     }
 
-    const bgColor = gameManager.currentStartedRoom.backgroundColor ?? "#000000";
+    const bgColor = gameManager.currentMapRoom.backgroundColor ?? "#000000";
     // Whole-ish multiples of the 32px frame so the pixels stay crisp
     $: previewSize = $joinDesktopStore ? 144 : 80;
 
@@ -84,7 +88,8 @@
     function fitTiles() {
         if (!tilesBox || !tiles) return;
         const grid = tiles.firstElementChild;
-        const tile = grid?.firstElementChild;
+        // The first tile (the Recent page has a label above its tiles)
+        const tile = grid?.querySelector("[role=radio]") ?? grid?.firstElementChild;
         if (!(grid instanceof HTMLElement) || !(tile instanceof HTMLElement)) {
             tilesHeight = undefined;
             return;
@@ -114,7 +119,7 @@
         thumbTop = scrollHeight > clientHeight + 2 ? (scrollTop / scrollHeight) * 100 : 0;
     }
 
-    // Swiping the tiles sideways moves to the next or previous category (phones). The tiles follow the finger, and
+    // Swiping sideways under the pills moves to the next or previous category (phones). The tiles follow the finger, and
     // the categories on either side are already drawn, so the next one is there as soon as it slides in.
     let swipeHintBox: HTMLParagraphElement | undefined;
     let pagesBox: HTMLDivElement | undefined;
@@ -260,6 +265,7 @@
                         <span class="woka-spot-sprite">
                             <WokaImage
                                 {selectedTextures}
+                                layers={previewLayers}
                                 {wokaData}
                                 getTextureUrl={getWokaTextureUrl}
                                 canvasSize={previewSize}
@@ -297,7 +303,9 @@
                         <span class="u-eyebrow">{eyebrow}</span>
                         <h2 class="u-join-title">{title}</h2>
                     </header>
-                    {#if categories.length > 1}
+                    <!-- The picker's Recent row: fixed above the pills, it does not scroll or swipe -->
+                    <slot name="recent" />
+                    {#if categories.length > 0}
                         <div class="woka-pills-row relative md:mt-1.5" class:woka-pills-more={morePills}>
                             <div
                                 class="woka-pills flex gap-1.5 overflow-x-auto"
@@ -333,21 +341,21 @@
                             {/if}
                         </div>
                     {/if}
-                    <div class="flex-1 min-h-0 md:mt-3 flex flex-col" bind:this={tilesBox}>
+                    <!-- The whole area under the pills takes the swipe, also the empty space below a short page -->
+                    <div
+                        class="woka-swipe-area flex-1 min-h-0 md:mt-3 flex flex-col"
+                        bind:this={tilesBox}
+                        on:touchstart|passive={onTouchStart}
+                        on:touchmove|nonpassive={onTouchMove}
+                        on:touchend={onTouchEnd}
+                        on:touchcancel={onTouchEnd}
+                    >
                         <div
                             class="woka-tiles relative min-h-0"
                             class:woka-tiles-more={moreBelow}
                             style={tilesHeight ? `height: ${tilesHeight}px;` : ""}
                         >
-                            <div
-                                class="woka-pages h-full"
-                                class:woka-pages-sliding={sliding}
-                                bind:this={pagesBox}
-                                on:touchstart|passive={onTouchStart}
-                                on:touchmove|nonpassive={onTouchMove}
-                                on:touchend={onTouchEnd}
-                                on:touchcancel={onTouchEnd}
-                            >
+                            <div class="woka-pages h-full" class:woka-pages-sliding={sliding} bind:this={pagesBox}>
                                 {#each pageIndexes as index (index)}
                                     <div
                                         class="woka-tiles-scroll h-full overflow-y-auto"
@@ -378,6 +386,13 @@
                     </div>
                 </div>
             </div>
+
+            {#if saveError}
+                <p class="woka-save-error" role="alert">
+                    <IconAlertTriangle font-size="18" />
+                    <span>{saveError}</span>
+                </p>
+            {/if}
 
             <footer class="woka-footer">
                 <slot name="footer" />
@@ -469,6 +484,9 @@
     .woka-tiles {
         margin-right: 12px;
     }
+    .woka-swipe-area {
+        touch-action: pan-y;
+    }
     .woka-pages {
         position: relative;
         overflow: hidden;
@@ -549,6 +567,33 @@
     @keyframes woka-spin {
         to {
             transform: rotate(360deg);
+        }
+    }
+    /* The save error: coral, above Build / Continue (the buttons are pinned to the bottom on a phone) */
+    .woka-save-error {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+        margin: 0 1.75rem 0.75rem;
+        padding: 0.625rem 0.75rem;
+        border-radius: 12px;
+        background: rgba(233, 109, 81, 0.22);
+        color: #ffd9cf;
+        font-size: 13px;
+        line-height: 1.35;
+    }
+    .woka-save-error :global(svg) {
+        flex: none;
+        margin-top: 1px;
+    }
+    @media (max-width: 767px) {
+        .woka-save-error {
+            position: fixed;
+            left: 1rem;
+            right: 1rem;
+            bottom: 5.75rem;
+            z-index: 4;
+            margin: 0;
         }
     }
     .woka-footer {

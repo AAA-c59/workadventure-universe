@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { tick } from "svelte";
 
-vi.mock("../../../Phaser/Game/GameManager", () => ({
+const { gameManager } = vi.hoisted(() => ({
     gameManager: {
-        currentStartedRoom: { loginSceneLogo: "https://logos/login.png", errorSceneLogo: "https://logos/error.png" },
+        currentStartedRoom: { loginSceneLogo: "https://logos/login.png", errorSceneLogo: "https://logos/error.png" } as
+            | Record<string, string>
+            | undefined,
     },
 }));
+vi.mock("../../../Phaser/Game/GameManager", () => ({ gameManager }));
 vi.mock("../../../Connection/ConnectionManager", () => ({ connectionManager: { logout: vi.fn() } }));
 vi.mock("../../../Connection/LocalUserStore", () => ({ localUserStore: { setLastRoomUrl: vi.fn() } }));
 vi.mock("../../../../i18n/i18n-svelte", async () => {
@@ -25,6 +28,7 @@ vi.mock("../../../../i18n/i18n-svelte", async () => {
 import { errorScreenStore } from "../../../Stores/ErrorScreenStore";
 import { showReconnectingScreen } from "../../../Connection/ReconnectScreen";
 import ErrorScreen from "../ErrorScreen.svelte";
+import { universeLogo } from "../../images/universeLogo";
 
 describe("ErrorScreen logos", () => {
     let component: ErrorScreen | undefined;
@@ -36,6 +40,10 @@ describe("ErrorScreen logos", () => {
     });
 
     afterEach(() => {
+        gameManager.currentStartedRoom = {
+            loginSceneLogo: "https://logos/login.png",
+            errorSceneLogo: "https://logos/error.png",
+        };
         component?.$destroy();
         component = undefined;
         errorScreenStore.delete();
@@ -76,5 +84,31 @@ describe("ErrorScreen logos", () => {
         await tick();
 
         expect(images().filter((src) => src?.startsWith("https://"))).toEqual(["https://logos/error.png"]);
+    });
+    it("shows Universe's own logo, not the word, when no room has loaded yet", async () => {
+        gameManager.currentStartedRoom = undefined;
+        errorScreenStore.setError({
+            type: "error",
+            code: "NETWORK_ERROR",
+            title: "Network error",
+            subtitle: "Network Error",
+        } as never);
+        component = new ErrorScreen({ target });
+        await tick();
+
+        expect(images()).toEqual([universeLogo]);
+        expect(universeLogo.startsWith("data:image/svg+xml,")).toBe(true);
+        expect(target.querySelector(".logo")?.textContent?.trim()).toBe("");
+    });
+
+    it("shows Universe's own logo when the room's logo fails to load", async () => {
+        errorScreenStore.setError({ type: "error", code: "SOMETHING", title: "Title" } as never);
+        component = new ErrorScreen({ target });
+        await tick();
+
+        target.querySelector("img")?.dispatchEvent(new Event("error"));
+        await tick();
+
+        expect(images()).toEqual([universeLogo]);
     });
 });

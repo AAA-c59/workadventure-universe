@@ -1,19 +1,25 @@
+import { wokaMine } from "@workadventure/messages";
+import type { WokaMine } from "@workadventure/messages";
 import { gameManager } from "../../Phaser/Game/GameManager";
 import { localUserStore } from "../../Connection/LocalUserStore";
+import { hasCapability } from "../../Connection/Capabilities";
 import { ABSOLUTE_PUSHER_URL } from "../../Enum/ComputedConst";
 import type { WokaData, WokaTexture } from "./WokaTypes";
 
 /** The WOKA parts in the order they are drawn, bottom to top. */
 export const wokaBodyPartOrder = ["body", "eyes", "hair", "clothes", "hat", "accessory", "woka"] as const;
 
+/** How long the picker and the popup wait for `woka/mine` before they go on without it */
+export const wokaMineTimeoutMs = 5000;
+
 let cached: { roomUrl: string; promise: Promise<WokaData> } | undefined;
 
 /**
- * The room's WOKA catalog (woka/list). The join screens share one request: the name screen and the camera screen
+ * The WOKA catalog of the room the player is in (woka/list). The join screens share one request: the name screen and the camera screen
  * show your WOKA, and the picker lists the catalog. A failed request is not kept, so Retry asks again.
  */
 export function fetchWokaData(): Promise<WokaData> {
-    const roomUrl = gameManager.currentStartedRoom.href;
+    const roomUrl = gameManager.currentMapRoom.href;
     if (cached && cached.roomUrl === roomUrl) {
         return cached.promise;
     }
@@ -67,4 +73,34 @@ export function texturesByPart(textureIds: string[] | null, wokaData: WokaData):
         if (first) result.woka = first;
     }
     return result;
+}
+
+/**
+ * What the signed-in player wears and wore lately, as seen from the room they are in (`woka/mine`): the popup draws
+ * its outfits from it and the picker its Recent row. Asked each time, since every pick changes it. Undefined for a
+ * guest, when the server does not tell, or when the request fails: the callers then go on without it.
+ */
+export async function fetchWokaMine(): Promise<WokaMine | undefined> {
+    if (!localUserStore.isLogged() || !hasCapability("api/woka/mine")) return undefined;
+    // The picker and the popup wait for this: a slow answer is dropped after a few seconds, not waited for forever
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), wokaMineTimeoutMs);
+    try {
+        const roomUrl = gameManager.currentMapRoom.href;
+        const response = await fetch(`${ABSOLUTE_PUSHER_URL}woka/mine?roomUrl=${encodeURIComponent(roomUrl)}`, {
+            headers: {
+                Authorization: localUserStore.getAuthToken() || "",
+            },
+            credentials: "include",
+            signal: controller.signal,
+        });
+        if (!response.ok) return undefined;
+        const parsed = wokaMine.safeParse(await response.json());
+        return parsed.success ? parsed.data : undefined;
+    } catch (err) {
+        console.warn("Cannot load what you wore lately:", err);
+        return undefined;
+    } finally {
+        clearTimeout(timer);
+    }
 }

@@ -6,6 +6,7 @@
     import { enableCameraSceneVisibilityStore } from "../Stores/MediaStore";
     import { selectCharacterSceneVisibleStore } from "../Stores/SelectCharacterStore";
     import { selectCompanionSceneVisibleStore } from "../Stores/SelectCompanionStore";
+    import { wokaRefusedStore } from "../Stores/WokaRefusedStore";
     import { gameSceneIsLoadedStore } from "../Stores/GameSceneStore";
     import { refreshPromptStore } from "../Stores/RefreshPromptStore";
     import { forceRefreshChatStore } from "../Stores/ChatStore";
@@ -34,6 +35,7 @@
     import MainModal from "./Modal/MainModal.svelte";
     import DroppingFileScene from "./DroppingFile/DroppingFileScene.svelte";
     import WokaScene from "./Woka/WokaScene.svelte";
+    import WokaRefusedPopup from "./Woka/WokaRefusedPopup.svelte";
 
     export let game: Game;
 
@@ -80,6 +82,8 @@
     <div class="h-dvh overflow-y-auto">
         <LoginScene {game} />
     </div>
+{:else if $wokaRefusedStore}
+    <WokaRefusedPopup kind={$wokaRefusedStore} />
 {:else if $selectCharacterSceneVisibleStore}
     <div class="absolute inset-0 h-dvh">
         <WokaScene />

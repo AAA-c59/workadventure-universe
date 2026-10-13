@@ -9,7 +9,7 @@ import type { CompanionTextureDescriptionInterface, CompanionTextures } from "./
 import LoaderPlugin = Phaser.Loader.LoaderPlugin;
 
 export function companionListMetakey() {
-    return "companion-list" + gameManager.currentStartedRoom.href;
+    return "companion-list" + gameManager.currentMapRoom.href;
 }
 
 export function lazyLoadPlayerCompanionTexture(
@@ -34,7 +34,7 @@ export class CompanionTexturesLoadingManager {
             .json(
                 companionListMetakey(),
                 new URL(
-                    `companion/list?roomUrl=` + encodeURIComponent(gameManager.currentStartedRoom.href),
+                    `companion/list?roomUrl=` + encodeURIComponent(gameManager.currentMapRoom.href),
                     ABSOLUTE_PUSHER_URL
                 ).toString(),
                 undefined,

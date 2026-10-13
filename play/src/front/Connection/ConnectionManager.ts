@@ -16,6 +16,7 @@ import { analyticsClient } from "../Administration/AnalyticsClient";
 import { userIsConnected, warningBannerStore } from "../Stores/MenuStore";
 import { loginSceneVisibleIframeStore } from "../Stores/LoginSceneStore";
 import { _ServiceWorker } from "../Network/ServiceWorker";
+import { INSTALL_ROOM_PARAMETER, installRoomPath } from "../Install/InstallRoom";
 import { GameConnexionTypes, urlManager } from "../Url/UrlManager";
 import {
     CARDS_ENABLED,
@@ -42,16 +43,29 @@ import { ABSOLUTE_PUSHER_URL } from "../Enum/ComputedConst";
 import { openChatRoom } from "../Chat/Utils";
 import LL from "../../i18n/i18n-svelte";
 import { errorScreenStore } from "../Stores/ErrorScreenStore";
+import { refusedOnLoad } from "../Stores/WokaRefusedStore";
 import { gameTokenToJoinWith } from "../external-modules/admin-api/orbitAccessToken";
 import { axiosToPusher, axiosWithRetry } from "./AxiosUtils";
 import { Room } from "./Room";
 import { LocalUser } from "./LocalUser";
 import { localUserStore } from "./LocalUserStore";
+import { shouldSaveNameOnServer } from "./LocalUserUtils";
 import type { OnConnectInterface, PositionInterface, ViewportInterface } from "./ConnexionModels";
 import { RoomConnection } from "./RoomConnection";
 import { watchConnectAttempt } from "./ConnectAttemptWatch";
 import { HtmlUtils } from "./../WebRtc/HtmlUtils";
 import { hasCapability } from "./Capabilities";
+
+/** How a save of the WOKA or the companion ended: kept, refused for this place by the admin, or not saved at all. */
+export type SaveResult = "saved" | "notAllowed" | "failed";
+
+function saveFailure(err: unknown): SaveResult {
+    const refused =
+        isAxiosError(err) &&
+        err.response?.status === 422 &&
+        (err.response.data as { code?: unknown } | undefined)?.code === "WOKA_NOT_ALLOWED";
+    return refused ? "notAllowed" : "failed";
+}
 
 export interface ConnectOptions {
     /** Whether whoever asked no longer wants this connection (the map was closed): no more retries, no screen changes. */
@@ -293,17 +307,24 @@ class ConnectionManager {
             let roomPath: string;
             if (this.connexionType === GameConnexionTypes.empty) {
                 roomPath = localUserStore.getLastRoomUrl();
+                let lastRoomKnown = localUserStore.hasLastRoomUrl();
                 //get last room path from cache api
                 try {
                     const lastRoomUrl = await localUserStore.getLastRoomUrlCacheApi();
                     if (lastRoomUrl != undefined) {
                         roomPath = lastRoomUrl;
+                        lastRoomKnown = true;
                     }
                 } catch (err) {
                     console.error(err);
                     if (err instanceof Error) {
                         console.error(err.stack);
                     }
+                }
+                // The installed app's first launch, with empty storage: the room it was installed from.
+                const installRoom = installRoomPath(urlParams.get(INSTALL_ROOM_PARAMETER));
+                if (!lastRoomKnown && installRoom !== undefined) {
+                    roomPath = window.location.protocol + "//" + window.location.host + installRoom;
                 }
             } else {
                 const query = urlParams.toString();
@@ -365,7 +386,12 @@ class ConnectionManager {
                         };
                     }
                     if (response.status === "ok") {
-                        if (response.isCharacterTexturesValid === false) {
+                        // A world that refuses what the player wears asks them first: the join is refused too and opens
+                        // the popup (WokaRefusedPopup), so no picker here. Without a Woka on the device there is nothing
+                        // to ask about and the picker opens.
+                        if (refusedOnLoad(response, localUserStore.getCharacterTextures())) {
+                            nextScene = "gameScene";
+                        } else if (response.isCharacterTexturesValid === false) {
                             nextScene = "selectCharacterScene";
                         } else if (response.isCompanionTextureValid === false) {
                             nextScene = "selectCompanionScene";
@@ -858,7 +884,13 @@ class ConnectionManager {
     }
 
     async saveName(name: string): Promise<boolean> {
-        if (hasCapability("api/save-name") && this.authToken !== undefined) {
+        if (
+            shouldSaveNameOnServer({
+                hasNameCapability: Boolean(hasCapability("api/save-name")),
+                hasAuthToken: this.authToken !== undefined,
+                isSignedIn: localUserStore.isLogged(),
+            })
+        ) {
             try {
                 await axiosToPusher.post(
                     "save-name",
@@ -919,136 +951,83 @@ class ConnectionManager {
         }
     }
 
-    async saveTextures(textures: string[]): Promise<boolean> {
-        if (hasCapability("api/save-textures") && this.authToken !== undefined) {
-            try {
-                await axiosToPusher.post(
-                    "save-textures",
-                    {
-                        textures,
-                        roomUrl: this.currentRoom?.key,
-                    },
-                    {
-                        headers: {
-                            Authorization: this.authToken,
-                        },
-                    }
-                );
-                // Broadcast texture change to other users in the room via WebSocket
-                this._roomConnection?.emitPlayerTextures(textures);
-                return true;
-            } catch (err) {
-                if (isAxiosError(err) && err.response?.status === 401) {
-                    console.warn("saveTextures: token expired, refreshing via /me");
-                    try {
-                        const meRes = await axiosToPusher.get("me", {
-                            headers: { Authorization: this.authToken ?? "" },
-                        });
-                        const { MeResponse } = await import("@workadventure/messages");
-                        const parsed = MeResponse.parse(meRes.data);
-                        if (parsed.status !== "ok" || !("authToken" in parsed)) {
-                            console.error("saveTextures: /me returned non-ok status");
-                            return false;
-                        }
-                        this.adoptRefreshedAuthToken((parsed as { authToken: string }).authToken);
-                        // Retry with fresh token
-                        await axiosToPusher.post(
-                            "save-textures",
-                            {
-                                textures,
-                                roomUrl: this.currentRoom?.key,
-                            },
-                            {
-                                headers: {
-                                    Authorization: this.authToken,
-                                },
-                            }
-                        );
-                        this._roomConnection?.emitPlayerTextures(textures);
-                        return true;
-                    } catch (refreshErr) {
-                        console.error("saveTextures: token refresh failed", refreshErr);
-                        return false;
-                    }
-                }
-                console.error("saveTextures: HTTP POST failed", err);
-                return false;
-            }
-        } else {
-            console.warn(
-                "saveTextures: skipped — missing auth or capability. authToken:",
-                !!this.authToken,
-                "capability:",
-                hasCapability("api/save-textures")
-            );
-            return false;
+    /**
+     * Saves the player's WOKA. "saved" also covers a guest (nothing is kept on an account, the device remembers it).
+     * "notAllowed" is the admin refusing this WOKA here; "failed" is anything else, so the caller can tell the player
+     * and keep what they wear.
+     */
+    async saveTextures(textures: string[]): Promise<SaveResult> {
+        const result = await this.postAccountSave("saveTextures", "save-textures", { textures });
+        if (result === "saved") {
+            // Broadcast texture change to other users in the room via WebSocket
+            this._roomConnection?.emitPlayerTextures(textures);
         }
+        return result;
     }
 
-    async saveCompanionTexture(texture: string | null): Promise<boolean> {
-        if (hasCapability("api/save-textures") && this.authToken !== undefined) {
-            try {
-                await axiosToPusher.post(
-                    "save-companion-texture",
-                    {
-                        texture,
-                        roomUrl: this.currentRoom?.key,
-                    },
-                    {
-                        headers: {
-                            Authorization: this.authToken,
-                        },
-                    }
-                );
-                return true;
-            } catch (err) {
-                if (isAxiosError(err) && err.response?.status === 401) {
-                    console.warn("saveCompanionTexture: token expired, refreshing via /me");
-                    try {
-                        const meRes = await axiosToPusher.get("me", {
-                            headers: { Authorization: this.authToken ?? "" },
-                        });
-                        const { MeResponse } = await import("@workadventure/messages");
-                        const parsed = MeResponse.parse(meRes.data);
-                        if (parsed.status !== "ok" || !("authToken" in parsed)) {
-                            console.error("saveCompanionTexture: /me returned non-ok");
-                            return false;
-                        }
-                        this.adoptRefreshedAuthToken((parsed as { authToken: string }).authToken);
-                        await axiosToPusher.post(
-                            "save-companion-texture",
-                            {
-                                texture,
-                                roomUrl: this.currentRoom?.key,
-                            },
-                            {
-                                headers: {
-                                    Authorization: this.authToken,
-                                },
-                            }
-                        );
-                        return true;
-                    } catch (refreshErr) {
-                        console.error("saveCompanionTexture: token refresh failed", refreshErr);
-                        return false;
-                    }
-                }
-                console.error("saveCompanionTexture: HTTP POST failed", err);
-                return false;
-            }
-        } else {
+    async saveCompanionTexture(texture: string | null): Promise<SaveResult> {
+        return await this.postAccountSave("saveCompanionTexture", "save-companion-texture", { texture });
+    }
+
+    /** One save to the pusher, with the one retry after a 401 that every save has. */
+    private async postAccountSave(what: string, path: string, payload: object): Promise<SaveResult> {
+        if (!hasCapability("api/save-textures") || this.authToken === undefined) {
+            // A guest: no account to save to. The device keeps it, as before.
             console.warn(
-                "saveCompanionTexture: skipped — missing auth or capability. authToken:",
+                `${what}: skipped — missing auth or capability. authToken:`,
                 !!this.authToken,
                 "capability:",
                 hasCapability("api/save-textures")
             );
-            return false;
+            return "saved";
+        }
+        const post = () =>
+            axiosToPusher.post(
+                path,
+                { ...payload, roomUrl: this.currentRoom?.key },
+                { headers: { Authorization: this.authToken } }
+            );
+        try {
+            await post();
+            return "saved";
+        } catch (err) {
+            if (isAxiosError(err) && err.response?.status === 401) {
+                console.warn(`${what}: token expired, refreshing via /me`);
+                try {
+                    const meRes = await axiosToPusher.get("me", {
+                        headers: { Authorization: this.authToken ?? "" },
+                    });
+                    const { MeResponse } = await import("@workadventure/messages");
+                    const parsed = MeResponse.parse(meRes.data);
+                    if (parsed.status !== "ok" || !("authToken" in parsed)) {
+                        console.error(`${what}: /me returned non-ok status`);
+                        return "failed";
+                    }
+                    this.adoptRefreshedAuthToken((parsed as { authToken: string }).authToken);
+                    // Retry with fresh token
+                    await post();
+                    return "saved";
+                } catch (refreshErr) {
+                    console.error(`${what}: token refresh failed`, refreshErr);
+                    return saveFailure(refreshErr);
+                }
+            }
+            console.error(`${what}: HTTP POST failed`, err);
+            return saveFailure(err);
         }
     }
 
     get currentRoom() {
         return this._currentRoom;
+    }
+
+    /**
+     * The room the player is in now. The page only picks its first room at load; moving to another map (an exit,
+     * WA.nav.goToRoom, the Explore list) does not reload the page, so each new map says where the player is. Saving a
+     * Woka, a name or a companion tells Orbit which room it was picked in.
+     */
+    setCurrentRoom(room: Room): void {
+        this._currentRoom = room;
     }
 
     get klaxoonToolActivated(): boolean {

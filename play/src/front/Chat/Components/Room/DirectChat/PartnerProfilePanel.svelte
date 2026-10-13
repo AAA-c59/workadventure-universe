@@ -10,6 +10,8 @@
     } from "../../../Connection/ChatConnection";
     import type { PictureStore } from "../../../../Stores/PictureStore";
     import { notificationPlayingStore } from "../../../../Stores/NotificationStore";
+    import { warningMessageStore } from "../../../../Stores/ErrorStore";
+    import { localUserStore } from "../../../../Connection/LocalUserStore";
     import {
         NAME_BY_CHAT_ID_CONTEXT,
         PERSON_COLOUR_CONTEXT,
@@ -27,6 +29,7 @@
     import type { DirectPartner } from "./DirectPartnerStore";
     import { isInUniverse } from "./PartnerPlace";
     import { partnerStatus } from "./PartnerStatus";
+    import { partnerStillInChat } from "./partnerStillInChat";
     import {
         canInvitePartner,
         canOpenPartnerProfile,
@@ -62,6 +65,8 @@
     const dispatch = createEventDispatcher<{ close: void }>();
     const roomName = room.name;
     const areNotificationsMuted = room.areNotificationsMuted;
+    // The delete text differs once the other person has already deleted the chat.
+    const partnerHolds = partnerStillInChat(room.members, localUserStore.getChatId());
     const direction = document.documentElement.getAttribute("dir") || "ltr";
     const wokaByChatId: Readable<Map<string, PictureStore>> = hasContext(WOKA_BY_CHAT_ID_CONTEXT)
         ? getContext(WOKA_BY_CHAT_ID_CONTEXT)
@@ -104,13 +109,17 @@
     }
 
     function deleteChat() {
-        room.leaveRoom()
+        // Deleting a chat leaves it and forgets it, so it goes from the person's lists and not just from view.
+        room.leaveRoom({ forget: true })
             .then(() => {
                 dispatch("close");
                 if ($selectedRoomStore?.id === room.id) selectedRoomStore.set(undefined);
                 notificationPlayingStore.playNotification($LL.chat.directChat.deleteChat.notification());
             })
-            .catch((error) => console.error("Failed to delete the chat", error));
+            .catch((error) => {
+                console.error("Failed to delete the chat", error);
+                warningMessageStore.addWarningMessage($LL.chat.directChat.deleteChat.failed());
+            });
     }
 </script>
 
@@ -296,7 +305,11 @@
             {#if confirmingDelete}
                 <div class="flex flex-col gap-2 p-2 text-sm" data-testid="partnerDeleteConfirm">
                     <span class="font-bold">{$LL.chat.directChat.deleteChat.confirm()}</span>
-                    <span class="text-xs text-white/60">{$LL.chat.directChat.deleteChat.hint({ name })}</span>
+                    <span class="text-xs text-white/60"
+                        >{$partnerHolds
+                            ? $LL.chat.directChat.deleteChat.hint({ name })
+                            : $LL.chat.directChat.deleteChat.hintGone({ name })}</span
+                    >
                     <div class="flex gap-2">
                         <button
                             type="button"
@@ -322,7 +335,11 @@
                     <span class="u-menu-tile"><IconTrash /></span>
                     <span class="flex min-w-0 flex-1 flex-col">
                         <span class="truncate">{$LL.chat.directChat.deleteChat.label()}</span>
-                        <span class="partner-hint">{$LL.chat.directChat.deleteChat.hint({ name })}</span>
+                        <span class="partner-hint"
+                            >{$partnerHolds
+                                ? $LL.chat.directChat.deleteChat.hint({ name })
+                                : $LL.chat.directChat.deleteChat.hintGone({ name })}</span
+                        >
                     </span>
                 </button>
             {/if}

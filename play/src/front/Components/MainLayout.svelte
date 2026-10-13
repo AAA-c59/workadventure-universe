@@ -51,6 +51,9 @@
     import Menu from "./Menu/Menu.svelte";
     import ReportMenu from "./ReportMenu/ReportMenu.svelte";
     import ReportSentToast from "./ReportMenu/ReportSentToast.svelte";
+    import InstallCard from "./Install/InstallCard.svelte";
+    import InstallGuide from "./Install/InstallGuide.svelte";
+    import InstalledToast from "./Install/InstalledToast.svelte";
     import VisitCard from "./VisitCard/VisitCard.svelte";
     import WarningBanner from "./WarningContainer/WarningBanner.svelte";
     import BanMessageContainer from "./TypeMessage/BanMessageContainer.svelte";
@@ -216,6 +219,9 @@
                 <ReportMenu />
             {/if}
             <ReportSentToast />
+            <InstallCard />
+            <InstalledToast />
+            <InstallGuide />
 
             {#if $helpNotificationSettingsVisibleStore}
                 <HelpNotificationSettingsPopup />

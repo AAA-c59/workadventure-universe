@@ -1,5 +1,6 @@
 <script lang="ts">
     import { onDestroy, onMount } from "svelte";
+    import { get } from "svelte/store";
     import type { CompanionTexture } from "@workadventure/messages";
     import { LL } from "../../../i18n/i18n-svelte";
     import type { Game } from "../../Phaser/Game/Game";
@@ -8,11 +9,12 @@
     import { gameManager } from "../../Phaser/Game/GameManager";
     import { analyticsClient } from "../../Administration/AnalyticsClient";
     import { localUserStore } from "../../Connection/LocalUserStore";
-    import { companionCollectionsStore } from "../../Stores/SelectCompanionStore";
+    import { companionCollectionsStore, selectCompanionSceneVisibleStore } from "../../Stores/SelectCompanionStore";
+    import { refusedPickerStore, wokaRefusedStore } from "../../Stores/WokaRefusedStore";
     import MyWoka from "../Join/MyWoka.svelte";
     import SheetSprite from "../Join/SheetSprite.svelte";
     import { getWokaTextureUrl } from "../Woka/WokaData";
-    import { IconBan, IconCheck, IconPaw, IconX } from "@wa-icons";
+    import { IconAlertTriangle, IconBan, IconCheck, IconPaw, IconX } from "@wa-icons";
 
     export let game: Game;
 
@@ -20,8 +22,10 @@
     function companionScene(): SelectCompanionScene | null {
         return (game.scene.getScene(SelectCompanionSceneName) as SelectCompanionScene | null) ?? null;
     }
-    // Opened from the game's menu: the round close leads back into the room with the companion unchanged
-    const canGoBack = gameManager.canResumeGame;
+    // Opened from the game's menu: the round close leads back into the room with the companion unchanged. Opened from
+    // the "can't come here" popup: it leads back to the popup, because there is no room to return to yet.
+    const fromRefusal = get(refusedPickerStore) === "companion";
+    const canGoBack = gameManager.canResumeGame || fromRefusal;
 
     $: collections = $companionCollectionsStore ?? [];
 
@@ -46,6 +50,8 @@
         selected = current?.texture ?? null;
     }
     let saving = false;
+    // Why the last Continue did not save: the companion you have is unchanged
+    let error = "";
 
     // The walkers and tiles are drawn at whole multiples of 32px so the pixels stay crisp
     const desktopQuery = window.matchMedia("(min-width: 768px)");
@@ -65,16 +71,31 @@
         const scene = companionScene();
         if (saving || !scene) return;
         saving = true;
+        error = "";
         const id = selected?.id;
         if (id) analyticsClient.selectCompanion();
-        (id ? scene.selectCompanion(id) : scene.noCompagnion()).catch((e) => {
-            console.error(e);
-            // Continue works again, so you can retry
-            saving = false;
-        });
+        (id ? scene.selectCompanion(id) : scene.noCompagnion())
+            .then((result) => {
+                if (result === "saved") return;
+                // The screen stays open and Continue works again, so you can retry
+                error =
+                    result === "notAllowed" ? $LL.companion.select.saveNotAllowed() : $LL.companion.select.saveFailed();
+                saving = false;
+            })
+            .catch((e) => {
+                console.error(e);
+                error = $LL.companion.select.saveFailed();
+                saving = false;
+            });
     }
 
     function back() {
+        if (fromRefusal) {
+            refusedPickerStore.set(undefined);
+            selectCompanionSceneVisibleStore.set(false);
+            wokaRefusedStore.set("companion");
+            return;
+        }
         companionScene()?.closeScene();
     }
 
@@ -248,6 +269,12 @@
         </div>
 
         <footer class="companion-footer">
+            {#if error}
+                <p class="companion-error" role="alert">
+                    <IconAlertTriangle font-size="18" />
+                    <span>{error}</span>
+                </p>
+            {/if}
             <span class="u-join-hint hidden md:inline-flex items-center gap-1 me-auto">
                 <span class="u-join-kbd">←</span>
                 <span class="u-join-kbd">→</span>
@@ -310,8 +337,27 @@
     .companion-pills {
         scrollbar-width: none;
     }
+    /* The save error: coral, above Continue */
+    .companion-error {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+        flex: 1 0 100%;
+        margin: 0;
+        padding: 0.625rem 0.75rem;
+        border-radius: 12px;
+        background: rgba(233, 109, 81, 0.22);
+        color: #ffd9cf;
+        font-size: 13px;
+        line-height: 1.35;
+    }
+    .companion-error :global(svg) {
+        flex: none;
+        margin-top: 1px;
+    }
     .companion-footer {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
         justify-content: flex-end;
         gap: 0.625rem;
