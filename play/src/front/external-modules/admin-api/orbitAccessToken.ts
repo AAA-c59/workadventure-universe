@@ -97,9 +97,17 @@ async function renewGameToken(
         if (typeof renewedGameToken !== "string") return null;
         const renewed = getAccessTokenFromJwt(renewedGameToken);
         if (!renewed) return null;
-        const stillCurrent =
-            isCurrent() && holder.userAccessToken === gameToken && localUserStore.getAuthToken() !== null;
+        const stored = localUserStore.getAuthToken();
+        const stillCurrent = isCurrent() && holder.userAccessToken === gameToken && stored !== null;
         if (!stillCurrent) return null;
+        // The store is shared by every tab: another tab may have saved a newer token while this answer was on its way.
+        // Its token may already have replaced the refresh token this answer carries, so this one is not kept; the
+        // holder (and so this caller's answer) moves on to the stored one instead.
+        if (stored !== gameToken) {
+            // eslint-disable-next-line require-atomic-updates -- checked just above, with no await in between
+            holder.userAccessToken = stored;
+            return null;
+        }
         // The rest of the game uses the renewed token from here on too. `stillCurrent` just checked, synchronously,
         // that the holder still has the token this renewal started from.
         // eslint-disable-next-line require-atomic-updates

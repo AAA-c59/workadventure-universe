@@ -1223,6 +1223,43 @@ describe("Signing Orbit in when the OIDC access token has run out", () => {
         expect(frame.postMessage).not.toHaveBeenCalled();
     });
 
+    it("keeps the newer token another tab saved while this tab's renewal was on its way", async () => {
+        const expired = makeOidcToken(nowSeconds() - 10);
+        const fromOtherTab = makeOidcToken(nowSeconds() + 7200);
+        const late = makeOidcToken(nowSeconds() + 3600);
+        const release = pendingMe();
+        await openedWith(makeAccessTokenJwt(expired));
+        orbitSends();
+        await vi.runAllTimersAsync();
+        // Another tab renewed first and saved its token in the shared store.
+        const otherTabToken = makeAccessTokenJwt(fromOtherTab);
+        mocks.getAuthToken.mockReturnValue(otherTabToken);
+
+        release(makeAccessTokenJwt(late));
+        await vi.runAllTimersAsync();
+        // The late answer is not written over it, and Orbit is signed in with the stored one.
+        expect(mocks.setAuthToken).not.toHaveBeenCalled();
+        expect(mocks.getAuthToken()).toBe(otherTabToken);
+        expect(frame.postMessage).toHaveBeenCalledWith(expect.objectContaining({ accessToken: fromOtherTab }), ADMIN);
+        expect(frame.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ accessToken: late }), ADMIN);
+    });
+
+    it("joins a room with the newer token another tab saved while the renewal was on its way", async () => {
+        const expired = makeAccessTokenJwt(makeOidcToken(nowSeconds() - 10));
+        const otherTabToken = makeAccessTokenJwt(makeOidcToken(nowSeconds() + 7200));
+        const late = makeAccessTokenJwt(makeOidcToken(nowSeconds() + 3600));
+        mocks.getAuthToken.mockReturnValue(expired);
+        mocks.setAuthToken.mockImplementation((token: string) => mocks.getAuthToken.mockReturnValue(token));
+        vi.resetModules();
+        const module = await import("./orbitAccessToken");
+        const release = pendingMe();
+        const joined = module.gameTokenToJoinWith(expired, "other-room", () => true);
+        mocks.getAuthToken.mockReturnValue(otherTabToken);
+        release(late);
+        expect(await joined).toBe(otherTabToken);
+        expect(mocks.setAuthToken).not.toHaveBeenCalled();
+    });
+
     it("starts from the game's newest token when the bot editor already renewed it", async () => {
         const expired = makeOidcToken(nowSeconds() - 10);
         const renewed = makeOidcToken(nowSeconds() + 3600);
