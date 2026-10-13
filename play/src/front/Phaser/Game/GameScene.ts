@@ -69,7 +69,6 @@ import { Loader } from "../Components/Loader";
 import { RemotePlayer } from "../Entity/RemotePlayer";
 import { SelectCharacterScene, SelectCharacterSceneName } from "../Login/SelectCharacterScene";
 import { hasMovedEventName, Player, requestEmoteEventName } from "../Player/Player";
-import { ErrorSceneName } from "../Reconnecting/ErrorScene";
 import { ReconnectingSceneName } from "../Reconnecting/ReconnectingScene";
 import { TextUtils } from "../Components/TextUtils";
 import { joystickBaseImg, joystickBaseKey, joystickThumbImg, joystickThumbKey } from "../Components/MobileJoystick";
@@ -4253,21 +4252,25 @@ ${escapedMessage}
         this.scene.stop(ReconnectingSceneName);
         this.scene.remove(ReconnectingSceneName);
         this.userInputManager.disableControls("errorScreen");
-        //FIX ME to use status code
-        if (message == undefined) {
-            this.scene.start(ErrorSceneName, {
-                title: "Connection rejected",
-                subTitle: "The world you are trying to join is full. Try again later.",
-                message: "If you want more information, you may contact us at: hello@workadventu.re",
-            });
-        } else {
-            this.scene.start(ErrorSceneName, {
-                title: "Connection rejected",
-                subTitle: "You cannot join the World. Try again later. \n\r \n\r Error: " + message + ".",
-                message:
-                    "If you want more information, you may contact administrator or contact us at: hello@workadventu.re",
-            });
-        }
+        // The usual error screen, with Universe's logo (the room's when it has loaded).
+        errorScreenStore.setError(
+            ErrorScreenMessage.fromPartial(
+                message == undefined
+                    ? {
+                          type: "error",
+                          code: "WORLD_FULL",
+                          title: "Connection rejected",
+                          subtitle: "The world you are trying to join is full. Try again later.",
+                      }
+                    : {
+                          type: "error",
+                          code: "CONNECTION_REJECTED",
+                          title: "Connection rejected",
+                          subtitle: "You cannot join the World. Try again later.",
+                          details: "Error: " + message + ".",
+                      }
+            )
+        );
     }
 
     private bindSceneEventHandlers(): void {
