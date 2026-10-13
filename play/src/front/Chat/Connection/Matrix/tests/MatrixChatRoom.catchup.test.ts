@@ -10,6 +10,8 @@ const timeline = vi.hoisted(() => ({
     running: 0,
     maxRunning: 0,
     loadError: undefined as Error | undefined,
+    /** How long the window takes to load (a read from the saved copy or the server). */
+    loadDelayMs: 0,
     paginateError: undefined as { onCall: number; error: Error } | undefined,
     /** The handlers the room registered on the sdk room, by event name. */
     handlers: new Map<string, (...args: unknown[]) => void>(),
@@ -20,11 +22,15 @@ vi.mock("matrix-js-sdk", async (importOriginal) => {
     class FakeTimelineWindow {
         private start = 0;
         private end = 0;
-        load(): Promise<void> {
-            if (timeline.loadError) return Promise.reject(timeline.loadError);
+        async load(): Promise<void> {
+            if (timeline.loadError) throw timeline.loadError;
+            if (timeline.loadDelayMs > 0) {
+                await new Promise<void>((resolve) => {
+                    setTimeout(resolve, timeline.loadDelayMs);
+                });
+            }
             this.end = timeline.events.length;
             this.start = Math.max(0, this.end - timeline.initial);
-            return Promise.resolve();
         }
         canPaginate(): boolean {
             return this.start > 0;
@@ -149,6 +155,10 @@ function emitTimelineReset() {
 }
 
 const ids = (room: MatrixChatRoom): string[] => [...room.messages].map((m) => m.id);
+const shortWait = () =>
+    new Promise<void>((resolve) => {
+        setTimeout(resolve, 5);
+    });
 const settle = () =>
     new Promise<void>((resolve) => {
         setTimeout(resolve, 40);
@@ -172,6 +182,7 @@ describe("MatrixChatRoom catching up after a reload or a sleeping tab", () => {
         timeline.running = 0;
         timeline.maxRunning = 0;
         timeline.loadError = undefined;
+        timeline.loadDelayMs = 0;
         timeline.paginateError = undefined;
         timeline.handlers.clear();
         notify = vi.fn();
@@ -272,6 +283,76 @@ describe("MatrixChatRoom catching up after a reload or a sleeping tab", () => {
             expect(shown).toEqual(all.slice(60 - shown.length).map((m) => m.getId()));
             expect(shown.length).toBeGreaterThanOrEqual(20);
             expect(new Set(shown).size).toBe(shown.length);
+        });
+
+        it("keeps the order when a message arrives while the list is being built again", async () => {
+            const all = Array.from({ length: 3 }, () => message());
+            const room = await roomWithSavedCopy(all, 1);
+
+            // The sync skipped a stretch: the new window will hold A, B and then the live message C.
+            const [a, b, c] = [message(), message(), message(400)];
+            timeline.events = [a, b];
+            timeline.loadDelayMs = 30;
+            emitTimelineReset();
+            await shortWait();
+            // C arrives live while the window is still loading, and is part of the window when it has loaded.
+            timeline.events = [a, b, c];
+            emitTimeline(c);
+            await settle();
+            await settle();
+
+            expect(ids(room)).toEqual([a, b, c].map((m) => m.getId()));
+        });
+
+        it("adds a catch-up message that arrives while the list is being built again once, in order", async () => {
+            const room = await roomWithSavedCopy([message()], 1);
+
+            const [a, b, c] = [message(), message(), message(120_000)];
+            timeline.events = [a, b];
+            timeline.loadDelayMs = 30;
+            emitTimelineReset();
+            await shortWait();
+            timeline.events = [a, b, c];
+            emitTimeline(c);
+            await settle();
+            await settle();
+
+            expect(ids(room)).toEqual([a, b, c].map((m) => m.getId()));
+        });
+
+        it("rings once for a live message that arrives while the list is being built again", async () => {
+            const room = await roomWithSavedCopy([message()], 1);
+
+            const [a, c] = [message(), message(400)];
+            timeline.events = [a];
+            timeline.loadDelayMs = 30;
+            emitTimelineReset();
+            await shortWait();
+            timeline.events = [a, c];
+            emitTimeline(c);
+            await settle();
+            await settle();
+
+            expect(ids(room)).toEqual([a, c].map((m) => m.getId()));
+            expect(notify).toHaveBeenCalledTimes(1);
+        });
+
+        it("brings back as much history as the person had loaded", async () => {
+            const all = Array.from({ length: 100 }, () => message());
+            const room = await roomWithSavedCopy(all, 100);
+            await room.loadMorePreviousMessages();
+            await room.loadMorePreviousMessages();
+            const before = ids(room).length;
+            expect(before).toBeGreaterThan(60);
+
+            emitTimelineReset();
+            await settle();
+            await settle();
+            await settle();
+
+            const shown = ids(room);
+            expect(shown.length).toBeGreaterThanOrEqual(before);
+            expect(shown).toEqual(all.slice(100 - shown.length).map((m) => m.getId()));
         });
 
         it("waits for the first load when the gap is found while it is still going", async () => {

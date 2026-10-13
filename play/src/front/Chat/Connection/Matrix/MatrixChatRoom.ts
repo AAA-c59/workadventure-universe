@@ -68,6 +68,9 @@ const PREVIOUS_MESSAGES_PER_LOAD = 20;
  */
 const FRESH_EVENT_MAX_AGE_MS = 2000;
 
+/** After the list is built again, earlier messages are paged back in until it is as long as it was, up to this many. */
+const MAX_RESTORED_MESSAGES = 100;
+
 type EventId = string;
 
 type ModerationAction = "ban" | "kick" | "invite" | "redact";
@@ -100,6 +103,11 @@ export class MatrixChatRoom
 
     /** The first load of the room's messages, which later loads of earlier messages wait for. */
     private readonly initialLoad: Promise<void>;
+    /**
+     * Whatever changes the list of messages (an event arriving, the list built again after a gap) runs one after the
+     * other through this, so a message is never added to a list that is being replaced.
+     */
+    private listWork: Promise<void>;
     /** The load of earlier messages under way, shared by everyone who asks meanwhile (one window, one pagination). */
     private previousMessagesLoad: Promise<void> | undefined;
 
@@ -191,6 +199,8 @@ export class MatrixChatRoom
             .finally(() => {
                 this.isLoadingMessages.set(false);
             });
+
+        this.listWork = this.initialLoad;
 
         //Necessary to keep matrix event content for local event deletions after initialization
         this.startHandlingChatRoomEvents();
@@ -316,63 +326,71 @@ export class MatrixChatRoom
 
         if (room === undefined) return;
 
-        // A catch-up event can arrive while the first load of the list is still under way: it goes in after it, never before.
-        const ready = isFresh ? Promise.resolve() : this.initialLoad;
-        ready
-            .then(async () => {
-                if (event.isEncrypted()) {
-                    await this.matrixRoom.client.decryptEventIfNeeded(event);
-                }
-                this.hasUnreadMessages.set(room.getUnreadNotificationCount() > 0);
-                this.unreadNotificationCount.set(room.getUnreadNotificationCount());
-                if (event.getType() === "m.room.message") {
-                    const eventId = event.getId();
+        // The list is changed one thing at a time: an event that arrives while the first load, or the list being built
+        // again after a gap, is under way is added after it, in the order it came.
+        this.enqueueListWork(async () => {
+            if (event.isEncrypted()) {
+                await this.matrixRoom.client.decryptEventIfNeeded(event);
+            }
+            this.hasUnreadMessages.set(room.getUnreadNotificationCount() > 0);
+            this.unreadNotificationCount.set(room.getUnreadNotificationCount());
+            if (event.getType() === "m.room.message") {
+                const eventId = event.getId();
 
-                    if (event.status === EventStatus.NOT_SENT) {
-                        if (eventId && !this.notSentEvents.has(eventId)) {
-                            this.notSentEvents.set(eventId, event);
-                        }
-                        return;
+                if (event.status === EventStatus.NOT_SENT) {
+                    if (eventId && !this.notSentEvents.has(eventId)) {
+                        this.notSentEvents.set(eventId, event);
                     }
-
-                    if (eventId && this.notSentEvents.has(eventId)) {
-                        this.notSentEvents.delete(eventId);
-                    }
-
-                    if (this.isEventReplacingExistingOne(event)) {
-                        this.handleMessageModification(event);
-                    } else if (isFresh || !eventId || !this.messages.has(eventId)) {
-                        this.handleNewMessage(event, isFresh);
-                    }
+                    return;
                 }
-                if (event.getType() === "m.reaction") {
-                    this.handleNewMessageReaction(event, this.messages);
+
+                if (eventId && this.notSentEvents.has(eventId)) {
+                    this.notSentEvents.delete(eventId);
                 }
-            })
-            .catch((error) => console.error(error));
+
+                if (this.isEventReplacingExistingOne(event)) {
+                    this.handleMessageModification(event);
+                } else {
+                    this.handleNewMessage(event, isFresh);
+                }
+            }
+            if (event.getType() === "m.reaction") {
+                this.handleNewMessageReaction(event, this.messages);
+            }
+        });
+    }
+
+    private enqueueListWork(work: () => Promise<void>): void {
+        this.listWork = this.listWork.then(work).catch((error) => console.error(error));
     }
 
     /**
      * The sdk started a new live timeline because the sync skipped events (a long time away, or more events than one
      * sync returns). The list we built sits before that gap, so it is built again from the new live end, and the
-     * earlier messages, gap included, are paged in behind it.
+     * earlier messages, gap included, are paged in behind it until the list is as long as it was.
      */
     private onRoomTimelineReset(): void {
-        this.initialLoad
-            .then(async () => {
-                // A page of earlier messages under way belongs to the window being replaced.
-                await this.previousMessagesLoad?.catch(() => {});
-                this.timelineWindow = new TimelineWindow(
-                    this.matrixRoom.client,
-                    this.matrixRoom.getLiveTimeline().getTimelineSet()
-                );
-                this.messages.forEach((message) => message.relations?.destroy());
-                this.messages.clear();
-                await this.initMatrixRoomMessagesAndReactions();
-                // The new end holds only what the last sync brought: read on behind it, across the gap, for a full screen.
-                if (this.messages.length < PREVIOUS_MESSAGES_PER_LOAD) await this.loadPreviousMessages();
-            })
-            .catch((error) => console.error("Failed to reload the messages after a gap", error));
+        this.enqueueListWork(async () => {
+            // A page of earlier messages under way belongs to the window being replaced.
+            await this.previousMessagesLoad?.catch(() => {});
+            const depth = Math.min(this.messages.length, MAX_RESTORED_MESSAGES);
+            this.timelineWindow = new TimelineWindow(
+                this.matrixRoom.client,
+                this.matrixRoom.getLiveTimeline().getTimelineSet()
+            );
+            this.messages.forEach((message) => message.relations?.destroy());
+            this.messages.clear();
+            await this.initMatrixRoomMessagesAndReactions();
+            // The new end holds only what the last sync brought: read on behind it, across the gap, for a full screen
+            // or as much history as the person had loaded.
+            const wanted = Math.max(depth, PREVIOUS_MESSAGES_PER_LOAD);
+            while (this.messages.length < wanted && get(this.hasPreviousMessage)) {
+                const lengthBefore = this.messages.length;
+                // eslint-disable-next-line no-await-in-loop
+                await this.loadPreviousMessages();
+                if (this.messages.length <= lengthBefore) break;
+            }
+        });
     }
 
     public async retrySendingEvents(): Promise<void> {
@@ -405,8 +423,12 @@ export class MatrixChatRoom
     }
 
     private handleNewMessage(event: MatrixEvent, isFresh = true) {
-        const message = new MatrixChatMessage(event, this.matrixRoom, false, this.type === "direct");
-        this.messages.push(message);
+        // The list built again after a gap can already hold it: it is never added twice.
+        const eventId = event.getId();
+        const message =
+            (eventId ? this.messages.get(eventId) : undefined) ??
+            new MatrixChatMessage(event, this.matrixRoom, false, this.type === "direct");
+        if (!eventId || !this.messages.has(eventId)) this.messages.push(message);
         const senderID = event.getSender();
         if (senderID) {
             if (get(botsChatIds).includes(senderID)) {
@@ -537,7 +559,8 @@ export class MatrixChatRoom
 
     /** Loads earlier messages (about a screen of them), after the room's first load. */
     async loadMorePreviousMessages() {
-        await this.initialLoad;
+        // Not while the list is being built again.
+        await this.listWork;
         await this.loadPreviousMessages();
     }
 
