@@ -360,6 +360,7 @@ describe("MatrixChatConnection: the chat with one person", () => {
                 expect(createRoom).not.toHaveBeenCalled();
 
                 const room = addRoom("!chat");
+                Object.assign(connection, { isClientReady: true });
                 connection.connectionStatus.set("ONLINE");
 
                 await expect(opening).resolves.toBe(room);
@@ -381,11 +382,11 @@ describe("MatrixChatConnection: the chat with one person", () => {
                 }
             });
 
-            it("does not wait when the connection is down: the error comes at once", async () => {
+            it("does not wait when the connection failed before the first sync, and makes no room", async () => {
                 connection.connectionStatus.set("ON_ERROR");
-                createRoom.mockRejectedValue(new Error("offline"));
 
-                await expect(connection.createDirectRoom(ALICE)).rejects.toBeDefined();
+                await expect(connection.createDirectRoom(ALICE)).rejects.toBeInstanceOf(ChatsStillLoadingError);
+                expect(createRoom).not.toHaveBeenCalled();
             });
         });
     });
@@ -642,6 +643,29 @@ describe("MatrixChatConnection: the chat with one person", () => {
 
                 connection["repairDirectAccountData"]();
                 await vi.waitFor(() => expect(createMessagesRequest).toHaveBeenCalledTimes(2));
+                await settle();
+
+                expect(setAccountData).not.toHaveBeenCalled();
+            });
+
+            it("lists a chat I made whose listing failed, from the direct invite I sent", async () => {
+                addRoom("!mine", { type: "multiple" });
+                firstEvents["!mine"] = [
+                    { type: "m.room.member", state_key: ME, sender: ME, content: { membership: "join" } },
+                    { ...directInvite(ME), state_key: ALICE },
+                ];
+
+                connection["repairDirectAccountData"]();
+
+                await vi.waitFor(() => expect(directMap).toEqual({ [ALICE]: ["!mine"] }));
+            });
+
+            it("does not list a group I made: its invites carry no direct flag", async () => {
+                addRoom("!group", { type: "multiple" });
+                firstEvents["!group"] = [{ ...directInvite(ME, { is_direct: false }), state_key: ALICE }];
+
+                connection["repairDirectAccountData"]();
+                await vi.waitFor(() => expect(createMessagesRequest).toHaveBeenCalledOnce());
                 await settle();
 
                 expect(setAccountData).not.toHaveBeenCalled();

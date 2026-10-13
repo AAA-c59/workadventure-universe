@@ -138,14 +138,19 @@ export interface InviteEventLike {
 }
 
 /**
- * Who invited me to this room as a direct chat, from the start of its history: the invite of mine that carried
- * `is_direct`. Unlike the flag the sdk keeps on my member event, this does not get lost when my profile changes.
+ * The other person of a direct chat, from the start of its history: the invite of mine that carried `is_direct`
+ * (someone invited me), or the direct invite I sent (I made the chat). Unlike the flag the sdk keeps on my member
+ * event, this does not get lost when my profile changes, and it finds a chat I made whose listing failed.
  */
 export function directInviterOf(events: readonly InviteEventLike[], myUserId: string): string | undefined {
     for (const event of events) {
-        if (event.type !== "m.room.member" || event.state_key !== myUserId) continue;
+        if (event.type !== "m.room.member") continue;
         if (event.content?.membership !== "invite" || event.content.is_direct !== true) continue;
-        if (event.sender && event.sender !== myUserId) return event.sender;
+        if (event.state_key === myUserId) {
+            if (event.sender && event.sender !== myUserId) return event.sender;
+        } else if (event.sender === myUserId && event.state_key) {
+            return event.state_key;
+        }
     }
     return undefined;
 }

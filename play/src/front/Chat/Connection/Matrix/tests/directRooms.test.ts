@@ -244,6 +244,20 @@ describe("directInviterOf", () => {
         expect(directInviterOf(events, "@me:x")).toBe("@a:x");
     });
 
+    it("is the person I sent the direct invite to, when I made the chat", () => {
+        expect(
+            directInviterOf(
+                [invite({}, "@me:x")].map((e) => ({ ...e, state_key: "@a:x" })),
+                "@me:x"
+            )
+        ).toBe("@a:x");
+    });
+
+    it("is nothing for an invite I sent without the direct flag (a group I made)", () => {
+        const sent = { ...invite({ is_direct: false }, "@me:x"), state_key: "@a:x" };
+        expect(directInviterOf([sent], "@me:x")).toBeUndefined();
+    });
+
     it("is nothing for an invite without the direct flag (a group)", () => {
         expect(directInviterOf([invite({ is_direct: false })], "@me:x")).toBeUndefined();
         expect(directInviterOf([invite({ is_direct: undefined })], "@me:x")).toBeUndefined();

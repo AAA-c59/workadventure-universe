@@ -292,8 +292,9 @@ export class MatrixChatConnection implements ChatConnectionInterface {
             if (!this.client) return;
             switch (state) {
                 case SyncState.Prepared:
-                    this.connectionStatus.set("ONLINE");
+                    // Ready first: whoever waits for the status to settle then finds the chats loaded.
                     this.isClientReady = true;
+                    this.connectionStatus.set("ONLINE");
                     this._ignoredUsers.set(this.client.getIgnoredUsers());
                     this.startSavingWokaAsAvatar();
                     this.repairDirectAccountData();
@@ -1077,10 +1078,12 @@ export class MatrixChatConnection implements ChatConnectionInterface {
 
     /**
      * Waits (a few seconds at most) for the first sync, when the chats of the account are loaded.
-     * Resolves to false when the wait ran out with the chats still not loaded.
+     * Resolves to false when they are not loaded in the end: the wait ran out, or the connection failed before the
+     * first sync (the list is then empty, whatever the account has).
      */
     private async waitForRoomList(): Promise<boolean> {
-        if (this.isClientReady || get(this.connectionStatus) !== "CONNECTING") return true;
+        if (this.isClientReady) return true;
+        if (get(this.connectionStatus) !== "CONNECTING") return false;
         return new Promise<boolean>((resolve) => {
             const waiting: { unsubscribe?: Unsubscriber; timer?: ReturnType<typeof setTimeout>; done: boolean } = {
                 done: false,
@@ -1094,7 +1097,7 @@ export class MatrixChatConnection implements ChatConnectionInterface {
             };
             waiting.timer = setTimeout(() => finish(false), ROOM_LIST_WAIT_MS);
             waiting.unsubscribe = this.connectionStatus.subscribe((status) => {
-                if (status !== "CONNECTING") finish(true);
+                if (status !== "CONNECTING") finish(this.isClientReady);
             });
             // The status was already settled: the subscription ran before there was anything to unsubscribe.
             if (waiting.done) waiting.unsubscribe();
