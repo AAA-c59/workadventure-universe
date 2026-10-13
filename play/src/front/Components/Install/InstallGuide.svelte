@@ -5,6 +5,7 @@
     import { LL } from "../../../i18n/i18n-svelte";
     import { installApp } from "../../Install/InstallWiring";
     import { installIconSrc } from "../../Install/InstallIcon";
+    import { enableUserInputsStore } from "../../Stores/UserInputStore";
     import type { InstallGuide } from "../../Install/InstallPlatform";
     import {
         IconApps,
@@ -184,7 +185,8 @@
     }
 
     function closeOnEscape(event: KeyboardEvent) {
-        if (event.key !== "Escape" || $guideOpenStore === undefined) return;
+        // An Escape that leaves a text field (the chat, a form) does only that.
+        if (event.key !== "Escape" || $guideOpenStore === undefined || !$enableUserInputsStore) return;
         event.stopPropagation();
         installApp.closeGuide();
     }

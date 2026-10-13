@@ -6,8 +6,11 @@
     import { actionsMenuStore } from "../../Stores/ActionsMenuStore";
     import { expressTrayStore } from "../../Stores/ExpressStore";
     import { liveBroadcastStore } from "../../Stores/MegaphoneStore";
+    import { installApp } from "../../Install/InstallWiring";
     import { enableUserInputsStore } from "../../Stores/UserInputStore";
     import BroadcastReceivedCard from "./BroadcastReceivedCard.svelte";
+
+    const { guideOpenStore } = installApp;
 
     // Escape dismisses the newest card only, one per press, and only when nothing else was open: an Escape that closes
     // a menu, a window, the Broadcast card or leaves a text field does only that. Read in the capture phase, before
@@ -23,6 +26,7 @@
             $wokaMenuStore !== undefined ||
             $actionsMenuStore !== undefined ||
             $expressTrayStore !== "closed" ||
+            $guideOpenStore !== undefined ||
             !$enableUserInputsStore;
         if (somethingElseOpen) return;
         const newest = $broadcastInboxStore[0];

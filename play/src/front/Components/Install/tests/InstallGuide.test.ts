@@ -11,14 +11,21 @@ vi.mock("../../../Install/InstallWiring", async () => {
     mocks.guideOpenStore = writable(undefined);
     return { installApp: { guideOpenStore: mocks.guideOpenStore, closeGuide: mocks.closeGuide } };
 });
+// The game's keys are switched off while a text field has focus
+vi.mock("../../../Stores/UserInputStore", async () => {
+    const { writable } = await import("svelte/store");
+    return { enableUserInputsStore: writable(true) };
+});
 vi.mock("../../../Install/InstallIcon", () => ({ installIconSrc: () => undefined }));
 vi.mock("../../../../i18n/i18n-svelte", async () => (await import("../../Woka/tests/i18nStub")).i18nStub);
 
 import type { Writable } from "svelte/store";
+import { enableUserInputsStore } from "../../../Stores/UserInputStore";
 import type { InstallGuide as InstallGuideKind } from "../../../Install/InstallPlatform";
 import InstallGuide from "../InstallGuide.svelte";
 import { settle, stubBrowser } from "../../Woka/tests/i18nStub";
 
+const userInputs = () => enableUserInputsStore as unknown as Writable<boolean>;
 const guideOpenStore = () => mocks.guideOpenStore as Writable<InstallGuideKind | undefined>;
 
 // #911: the guide opens without moving keyboard focus to it, and Escape does nothing
@@ -97,6 +104,21 @@ describe("the install guide and the keyboard", () => {
         await settle();
         document.dispatchEvent(new KeyboardEvent("keydown", { key: "a", bubbles: true }));
         expect(mocks.closeGuide).not.toHaveBeenCalled();
+    });
+
+    it("leaves Escape to a text field the player is typing in", async () => {
+        guideOpenStore().set("mac-safari");
+        await settle();
+        // The chat and the forms switch the game's keys off while a field has focus
+        userInputs().set(false);
+        try {
+            document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+            expect(mocks.closeGuide).not.toHaveBeenCalled();
+        } finally {
+            userInputs().set(true);
+        }
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        expect(mocks.closeGuide).toHaveBeenCalledTimes(1);
     });
 
     it("does not pull focus away when the player has already moved on", async () => {
