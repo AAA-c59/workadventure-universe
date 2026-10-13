@@ -714,6 +714,24 @@ describe("MatrixChatConnection: the chat with one person", () => {
                 expect(createMessagesRequest).toHaveBeenCalledTimes(2);
             });
 
+            it("when the list cannot be saved, still finds the chat for Message, and tries the save again next time", async () => {
+                const room = addRoom("!r1", { type: "multiple" });
+                firstEvents["!r1"] = [directInvite(ALICE)];
+                setAccountData.mockRejectedValueOnce(new Error("offline"));
+
+                connection["repairDirectAccountData"]();
+                await vi.waitFor(() => expect(setAccountData).toHaveBeenCalledOnce());
+                await settle();
+
+                // Not listed on the server, yet the invite says it is my chat with Alice: no second room is made.
+                expect(directMap).toBeUndefined();
+                expect(connection.getDirectRoomFor(ALICE)).toBe(room);
+
+                connection["repairDirectAccountData"]();
+                await vi.waitFor(() => expect(directMap).toEqual({ [ALICE]: ["!r1"] }));
+                expect(createMessagesRequest).toHaveBeenCalledTimes(2);
+            });
+
             it("lists two real chats with the same person, deletes neither, and opens the one with the newest message", async () => {
                 // R1 and R2 of #889: both direct invites from the same person, both joined.
                 addRoom("!r1", { type: "multiple", lastMessage: 900 });

@@ -114,7 +114,7 @@ export class MatrixChatConnection implements ChatConnectionInterface {
     private invitesChecked = new Set<string>();
     /** Repairs of the account's direct list that are running now, so opening a chat can wait for them. */
     private directRepairs = new Set<Promise<unknown>>();
-    /** What repairs saved, until the client's own copy of the list shows it (it only does after the next sync). */
+    /** Direct chats repairs found or saved, until the client's own copy of the list shows them (it only does after the next sync). */
     private repairedDirect: DirectMap = {};
     roomFolders: MapStore<MatrixRoomFolder["id"], MatrixRoomFolder> = new MapStore<
         MatrixRoomFolder["id"],
@@ -1140,17 +1140,27 @@ export class MatrixChatConnection implements ChatConnectionInterface {
         repair.then(done, done);
     }
 
-    /** Saves rooms to the account's direct list and remembers them as listed, since the client's copy lags behind. */
-    private saveRepairedRooms(client: MatrixClient, rooms: { userId: string; roomId: string }[]): Promise<void> {
+    /**
+     * Saves rooms to the account's direct list and remembers them as listed, since the client's copy lags behind.
+     * Resolves to whether the list was saved; a failure is logged and the repair is tried again on the next call.
+     */
+    private saveRepairedRooms(client: MatrixClient, rooms: { userId: string; roomId: string }[]): Promise<boolean> {
         return saveDirectRooms(client, rooms)
             .then(() => {
-                for (const { userId, roomId } of rooms) {
-                    this.repairedDirect = withDirectRoom(this.repairedDirect, userId, roomId) ?? this.repairedDirect;
-                }
+                this.rememberDirect(rooms);
+                return true;
             })
             .catch((error: unknown) => {
                 console.warn("Unable to repair the list of direct chats", error);
+                return false;
             });
+    }
+
+    /** Remembers these rooms as my direct chats for as long as the page lives, whether or not the list is saved yet. */
+    private rememberDirect(rooms: { userId: string; roomId: string }[]): void {
+        for (const { userId, roomId } of rooms) {
+            this.repairedDirect = withDirectRoom(this.repairedDirect, userId, roomId) ?? this.repairedDirect;
+        }
     }
 
     /** When the other person deleted the chat but I still have it, they are invited back into the same room. */
@@ -1234,9 +1244,14 @@ export class MatrixChatConnection implements ChatConnectionInterface {
                 }
             })
         )
-            .then((found) => {
+            .then(async (found) => {
                 const direct = found.filter((entry) => entry !== undefined);
-                return direct.length > 0 ? this.saveRepairedRooms(client, direct) : undefined;
+                if (direct.length === 0) return;
+                // The invite says these are direct chats, so opening a chat finds them even if the save below fails.
+                this.rememberDirect(direct);
+                if (await this.saveRepairedRooms(client, direct)) return;
+                // Not saved: looked at again the next time chats are opened or the page loads.
+                for (const { roomId } of direct) this.invitesChecked.delete(roomId);
             })
             .catch((error: unknown) => console.warn("Unable to repair the list of direct chats", error));
     }
