@@ -17,6 +17,11 @@ vi.mock("../../../../Phaser/Entity/CharacterLayerManager", () => ({
 vi.mock("../../../../Enum/EnvironmentVariable.ts", () => ({ MATRIX_ADMIN_USER: "admin", MATRIX_DOMAIN: "domain" }));
 vi.mock("../../../Stores/ChatStore.ts", () => ({ selectedRoomStore: writable(undefined) }));
 
+const settle = () =>
+    new Promise<void>((resolve) => {
+        setTimeout(resolve, 10);
+    });
+
 const ME = "@me:matrix.test";
 const ALICE = "@alice:matrix.test";
 
@@ -35,6 +40,10 @@ describe("MatrixChatConnection: the chat with one person", () => {
     /** What the server has been asked to do. */
     let createRoom: ReturnType<typeof vi.fn>;
     let invite: ReturnType<typeof vi.fn>;
+    let leave: ReturnType<typeof vi.fn>;
+    let createMessagesRequest: ReturnType<typeof vi.fn>;
+    /** The first member events of each room's history, as the server returns them. */
+    let firstEvents: Record<string, unknown[]>;
     let setAccountData: ReturnType<typeof vi.fn>;
     let directMap: Record<string, string[]> | undefined;
     let sdkRooms: Map<string, unknown>;
@@ -75,6 +84,9 @@ describe("MatrixChatConnection: the chat with one person", () => {
     beforeEach(async () => {
         createRoom = vi.fn().mockResolvedValue({ room_id: "!new:matrix.test" });
         invite = vi.fn().mockResolvedValue({});
+        leave = vi.fn().mockResolvedValue({});
+        firstEvents = {};
+        createMessagesRequest = vi.fn((roomId: string) => Promise.resolve({ chunk: firstEvents[roomId] ?? [] }));
         setAccountData = vi.fn().mockImplementation((_type: string, next: Record<string, string[]>) => {
             directMap = next;
             return Promise.resolve({});
@@ -96,6 +108,8 @@ describe("MatrixChatConnection: the chat with one person", () => {
             setAccountData,
             createRoom,
             invite,
+            leave,
+            createMessagesRequest,
         } as unknown as MatrixClient;
         connection = new MatrixChatConnection(Promise.resolve(client), { subscribe: vi.fn() }, {
             isEncryptionRequiredAndNotSet: false,
@@ -516,6 +530,115 @@ describe("MatrixChatConnection: the chat with one person", () => {
             connection["onAccountDataEvent"](event);
 
             expect(setAccountData).toHaveBeenCalledOnce();
+        });
+
+        describe("when the sdk lost the direct flag (the player's profile changed since they accepted)", () => {
+            /** The invite that started a direct chat, as the server holds it. */
+            const directInvite = (inviter: string, extra: object = {}) => ({
+                type: "m.room.member",
+                state_key: ME,
+                sender: inviter,
+                content: { membership: "invite", is_direct: true, ...extra },
+            });
+
+            it("lists a chat whose first invite was a direct invite from the other person", async () => {
+                // The shape of the two accounts in #889: R1 was accepted, is_direct was true, m.direct has nothing.
+                addRoom("!r1", { type: "multiple" });
+                firstEvents["!r1"] = [
+                    { type: "m.room.member", state_key: ALICE, sender: ALICE, content: { membership: "join" } },
+                    directInvite(ALICE),
+                ];
+
+                connection["repairDirectAccountData"]();
+
+                await vi.waitFor(() => expect(directMap).toEqual({ [ALICE]: ["!r1"] }));
+                expect(createMessagesRequest).toHaveBeenCalledOnce();
+                expect(createMessagesRequest.mock.calls[0][1]).toBeNull();
+                expect(createMessagesRequest.mock.calls[0][2]).toBeLessThanOrEqual(12);
+            });
+
+            it("then finds that chat for Message even though it is typed as a group", async () => {
+                const room = addRoom("!r1", { type: "multiple" });
+                firstEvents["!r1"] = [directInvite(ALICE)];
+
+                connection["repairDirectAccountData"]();
+                await vi.waitFor(() => expect(directMap).toBeDefined());
+
+                expect(connection.getDirectRoomFor(ALICE)).toBe(room);
+            });
+
+            it("leaves a group of two alone: its invite had no direct flag", async () => {
+                addRoom("!group", { type: "multiple", named: true });
+                firstEvents["!group"] = [directInvite(ALICE, { is_direct: false })];
+                addRoom("!group2", { type: "multiple", named: true });
+                firstEvents["!group2"] = [{ ...directInvite(ALICE), content: { membership: "invite" } }];
+
+                connection["repairDirectAccountData"]();
+                await vi.waitFor(() => expect(createMessagesRequest).toHaveBeenCalledTimes(2));
+                await settle();
+
+                expect(setAccountData).not.toHaveBeenCalled();
+            });
+
+            it("does not take a direct invite sent by me, or one for somebody else", async () => {
+                addRoom("!mine", { type: "multiple" });
+                firstEvents["!mine"] = [directInvite(ME)];
+                addRoom("!other", { type: "multiple" });
+                firstEvents["!other"] = [{ ...directInvite(ALICE), state_key: "@bob:matrix.test" }];
+
+                connection["repairDirectAccountData"]();
+                await vi.waitFor(() => expect(createMessagesRequest).toHaveBeenCalledTimes(2));
+                await settle();
+
+                expect(setAccountData).not.toHaveBeenCalled();
+            });
+
+            it("does not read the history of rooms with more than two people, or ones the account lists", async () => {
+                addRoom("!big", {
+                    type: "multiple",
+                    members: { [ME]: "join", [ALICE]: "join", "@bob:matrix.test": "join" },
+                });
+                addRoom("!listed", { type: "multiple" });
+                directMap = { "@carol:matrix.test": ["!listed"] };
+
+                connection["repairDirectAccountData"]();
+                await settle();
+
+                expect(createMessagesRequest).not.toHaveBeenCalled();
+            });
+
+            it("reads each room once per session, and again after a failed read", async () => {
+                addRoom("!r1", { type: "multiple" });
+                createMessagesRequest.mockRejectedValueOnce(new Error("offline"));
+
+                connection["repairDirectAccountData"]();
+                await vi.waitFor(() => expect(createMessagesRequest).toHaveBeenCalledOnce());
+                await settle();
+                connection["repairDirectAccountData"]();
+                await vi.waitFor(() => expect(createMessagesRequest).toHaveBeenCalledTimes(2));
+                await settle();
+                connection["repairDirectAccountData"]();
+                await settle();
+
+                expect(createMessagesRequest).toHaveBeenCalledTimes(2);
+            });
+
+            it("lists two real chats with the same person, deletes neither, and opens the one with the newest message", async () => {
+                // R1 and R2 of #889: both direct invites from the same person, both joined.
+                addRoom("!r1", { type: "multiple", lastMessage: 900 });
+                addRoom("!r2", { type: "multiple", lastMessage: 100 });
+                firstEvents["!r1"] = [directInvite(ALICE)];
+                firstEvents["!r2"] = [directInvite(ALICE)];
+
+                connection["repairDirectAccountData"]();
+                await vi.waitFor(() => expect(directMap?.[ALICE]).toHaveLength(2));
+
+                expect(directMap?.[ALICE]).toEqual(expect.arrayContaining(["!r1", "!r2"]));
+                expect(leave).not.toHaveBeenCalled();
+                expect(connection["roomList"].has("!r1")).toBe(true);
+                expect(connection["roomList"].has("!r2")).toBe(true);
+                expect(connection.getDirectRoomFor(ALICE)?.id).toBe("!r1");
+            });
         });
     });
 });

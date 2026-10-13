@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { DirectRoomCandidate } from "../directRooms";
 import {
+    directInviterOf,
     isChatWithPerson,
     isListedAsDirect,
     pickChatWithPerson,
@@ -176,5 +177,39 @@ describe("saveDirectRooms", () => {
 
         await expect(failing).rejects.toThrow("offline");
         await expect(next).resolves.toBeUndefined();
+    });
+});
+
+describe("directInviterOf", () => {
+    const invite = (extra: object = {}, sender = "@a:x") => ({
+        type: "m.room.member",
+        state_key: "@me:x",
+        sender,
+        content: { membership: "invite", is_direct: true, ...extra },
+    });
+
+    it("is the person whose direct invite I accepted", () => {
+        expect(directInviterOf([invite()], "@me:x")).toBe("@a:x");
+    });
+
+    it("skips other events and finds the invite among them", () => {
+        const events = [
+            { type: "m.room.member", state_key: "@a:x", sender: "@a:x", content: { membership: "join" } },
+            { type: "m.room.message", sender: "@a:x", content: {} },
+            invite(),
+        ];
+        expect(directInviterOf(events, "@me:x")).toBe("@a:x");
+    });
+
+    it("is nothing for an invite without the direct flag (a group)", () => {
+        expect(directInviterOf([invite({ is_direct: false })], "@me:x")).toBeUndefined();
+        expect(directInviterOf([invite({ is_direct: undefined })], "@me:x")).toBeUndefined();
+    });
+
+    it("is nothing for a join, an invite of someone else, or one I sent myself", () => {
+        expect(directInviterOf([invite({ membership: "join" })], "@me:x")).toBeUndefined();
+        expect(directInviterOf([{ ...invite(), state_key: "@b:x" }], "@me:x")).toBeUndefined();
+        expect(directInviterOf([invite({}, "@me:x")], "@me:x")).toBeUndefined();
+        expect(directInviterOf([], "@me:x")).toBeUndefined();
     });
 });

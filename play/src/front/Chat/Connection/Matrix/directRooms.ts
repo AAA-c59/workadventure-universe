@@ -16,7 +16,7 @@ export interface DirectRoomCandidate<Room> {
     lastActivity: number;
 }
 
-function holdsTheRoom(membership: ChatRoomMembership | undefined): boolean {
+export function holdsTheRoom(membership: ChatRoomMembership | undefined): boolean {
     return membership === "join" || membership === "invite";
 }
 
@@ -104,4 +104,25 @@ export function saveDirectRooms(
         run.catch(() => undefined)
     );
     return run;
+}
+
+/** The parts of a room event that tell who invited me to a direct chat. */
+export interface InviteEventLike {
+    type?: string;
+    state_key?: string;
+    sender?: string;
+    content?: { membership?: string; is_direct?: boolean };
+}
+
+/**
+ * Who invited me to this room as a direct chat, from the start of its history: the invite of mine that carried
+ * `is_direct`. Unlike the flag the sdk keeps on my member event, this does not get lost when my profile changes.
+ */
+export function directInviterOf(events: readonly InviteEventLike[], myUserId: string): string | undefined {
+    for (const event of events) {
+        if (event.type !== "m.room.member" || event.state_key !== myUserId) continue;
+        if (event.content?.membership !== "invite" || event.content.is_direct !== true) continue;
+        if (event.sender && event.sender !== myUserId) return event.sender;
+    }
+    return undefined;
 }
