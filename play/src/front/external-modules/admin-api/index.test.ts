@@ -1260,6 +1260,31 @@ describe("Signing Orbit in when the OIDC access token has run out", () => {
         expect(mocks.setAuthToken).not.toHaveBeenCalled();
     });
 
+    it("hands every caller sharing the renewal the newer token another tab saved, each with its own holder", async () => {
+        const expired = makeAccessTokenJwt(makeOidcToken(nowSeconds() - 10));
+        const fromOtherTab = makeOidcToken(nowSeconds() + 7200);
+        const otherTabToken = makeAccessTokenJwt(fromOtherTab);
+        mocks.getAuthToken.mockReturnValue(expired);
+        mocks.setAuthToken.mockImplementation((token: string) => mocks.getAuthToken.mockReturnValue(token));
+        vi.resetModules();
+        const module = await import("./orbitAccessToken");
+        const release = pendingMe();
+        // Orbit's frame and the bot editor each hold the game token in their own object, and share one renewal
+        const orbit = { userAccessToken: expired, roomId: "room" };
+        const botEditor = { userAccessToken: expired, roomId: "room" };
+        const orbitAnswer = module.freshOrbitAccessToken(orbit, false, () => true);
+        const botEditorAnswer = module.freshOrbitAccessToken(botEditor, false, () => true);
+        mocks.getAuthToken.mockReturnValue(otherTabToken);
+        release(makeAccessTokenJwt(makeOidcToken(nowSeconds() + 3600)));
+
+        expect(await orbitAnswer).toBe(fromOtherTab);
+        expect(await botEditorAnswer).toBe(fromOtherTab);
+        expect(orbit.userAccessToken).toBe(otherTabToken);
+        expect(botEditor.userAccessToken).toBe(otherTabToken);
+        expect(mocks.pusherGet).toHaveBeenCalledTimes(1);
+        expect(mocks.setAuthToken).not.toHaveBeenCalled();
+    });
+
     it("starts from the game's newest token when the bot editor already renewed it", async () => {
         const expired = makeOidcToken(nowSeconds() - 10);
         const renewed = makeOidcToken(nowSeconds() + 3600);

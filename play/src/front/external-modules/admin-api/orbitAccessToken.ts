@@ -101,13 +101,9 @@ async function renewGameToken(
         const stillCurrent = isCurrent() && holder.userAccessToken === gameToken && stored !== null;
         if (!stillCurrent) return null;
         // The store is shared by every tab: another tab may have saved a newer token while this answer was on its way.
-        // Its token may already have replaced the refresh token this answer carries, so this one is not kept; the
-        // holder (and so this caller's answer) moves on to the stored one instead.
-        if (stored !== gameToken) {
-            // eslint-disable-next-line require-atomic-updates -- checked just above, with no await in between
-            holder.userAccessToken = stored;
-            return null;
-        }
+        // Its token may already have replaced the refresh token this answer carries, so this one is not kept. Every
+        // caller then moves on to the stored token (see freshOrbitAccessToken).
+        if (stored !== gameToken) return null;
         // The rest of the game uses the renewed token from here on too. `stillCurrent` just checked, synchronously,
         // that the holder still has the token this renewal started from.
         // eslint-disable-next-line require-atomic-updates
@@ -160,7 +156,14 @@ export async function freshOrbitAccessToken(
     const renewed = await inFlight.promise;
     // Torn down or signed out meanwhile: nothing to hand out.
     if (!isCurrent() || localUserStore.getAuthToken() === null) return null;
-    // Couldn't renew (or another caller's renewal got there first): answer with the newest token there is.
+    // Couldn't renew, or the answer was not kept (another caller's renewal got there first, or another tab saved a
+    // newer token meanwhile): answer with the newest token there is, and let this holder start from it next time. This
+    // runs for every caller sharing the renewal, each with its own holder.
+    if (renewed === null) {
+        const stored = localUserStore.getAuthToken();
+        // eslint-disable-next-line require-atomic-updates -- the store is read just now; nothing else is awaited
+        if (stored) holder.userAccessToken = stored;
+    }
     return renewed ?? getAccessTokenFromJwt(holder.userAccessToken);
 }
 
