@@ -82,9 +82,7 @@ export class MatrixChatMessage implements ChatMessage {
             this.isMyMessage || (!this.isDirect && hasSufficientPowerLevel && myPowerLevel > senderPowerLevel)
         );
 
-        event.on(MatrixEventEvent.Decrypted, () => {
-            this.updateMessageContentOnDecryptedEvent();
-        });
+        event.on(MatrixEventEvent.Decrypted, this.onDecrypted);
 
         this.initReactions();
     }
@@ -111,6 +109,18 @@ export class MatrixChatMessage implements ChatMessage {
                 update((content) => (content.url === undefined ? content : { ...content, url: undefined }));
             };
         });
+    }
+
+    /** The same function is added to and removed from the event, which lives on after this message is replaced. */
+    private readonly onDecrypted = () => {
+        this.updateMessageContentOnDecryptedEvent();
+    };
+
+    /** The list that held this message is built again: the event no longer calls it, and its media is let go. */
+    destroy() {
+        this.event.off(MatrixEventEvent.Decrypted, this.onDecrypted);
+        this.releaseMedia();
+        this.relations?.destroy();
     }
 
     private updateMessageContentOnDecryptedEvent() {
