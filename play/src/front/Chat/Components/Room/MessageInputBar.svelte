@@ -27,6 +27,7 @@
     import { emoteMenuStore } from "../../../Stores/EmoteStore";
     import LazyEmote from "../../../Components/EmoteMenu/LazyEmote.svelte";
     import { composerDraftStore } from "../../Stores/ComposerDraftStore";
+    import { appendEmoji } from "./AppendEmoji";
     import { draftMessageService } from "../../Services/DraftMessageService";
     import { localUserStore } from "../../../Connection/LocalUserStore";
     import { MatrixChatRoom } from "../../Connection/Matrix/MatrixChatRoom";
@@ -665,7 +666,7 @@
             LazyEmote,
             {
                 onEmojiClick: (event: EmojiClickEvent) => {
-                    message += event.detail.unicode ?? "";
+                    message = appendEmoji(message, event.detail.unicode ?? "");
                 },
                 onClose: (event?: Event) => {
                     // The emoji button opens and closes the picker itself: its click is not a click outside. The
