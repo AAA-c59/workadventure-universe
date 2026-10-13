@@ -104,6 +104,19 @@ export function retryForgettingRememberedRooms(client: ForgetClient, userId: str
     scheduleRetry(client, userId, 0);
 }
 
+/**
+ * At start and reconnect: forgets the rooms written down for that account now, and keeps trying with the same growing
+ * wait for those that still could not be forgotten. Without the wait, a room written down before a reload during an
+ * outage would only be tried again at the next start or reconnect, however long the tab stays open.
+ */
+export async function forgetRememberedRoomsAndRetry(client: ForgetClient, userId: string): Promise<void> {
+    try {
+        await forgetRememberedRooms(client, userId);
+    } finally {
+        if (read(userId).length > 0) retryForgettingRememberedRooms(client, userId);
+    }
+}
+
 function scheduleRetry(client: ForgetClient, userId: string, step: number): void {
     const delay = FORGET_RETRY_DELAYS_MS[Math.min(step, FORGET_RETRY_DELAYS_MS.length - 1)];
     setTimeout(() => {

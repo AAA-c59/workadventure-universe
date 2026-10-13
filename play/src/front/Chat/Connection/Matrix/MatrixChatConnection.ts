@@ -62,7 +62,7 @@ import { clearMatrixMedia } from "./MatrixMedia";
 import { chatUserFactory, mapMatrixPresenceToAvailabilityStatus, toChatPresence } from "./MatrixChatUser";
 import { WokaAvatarSaver, wokaIdentity } from "./MatrixWokaAvatar";
 import type { DirectMap, DirectRoomCandidate } from "./directRooms";
-import { forgetRememberedRooms } from "./roomsToForget";
+import { forgetRememberedRoomsAndRetry } from "./roomsToForget";
 import {
     directInviterOf,
     holdsTheRoom,
@@ -112,6 +112,8 @@ export class MatrixChatConnection implements ChatConnectionInterface {
     private roomCreationsRunning = 0;
     /** Rooms whose first invite was already read this session, so each is looked at once. */
     private invitesChecked = new Set<string>();
+    /** Rooms whose first invite could not be read last time: until it is, any of them could be the chat being opened. */
+    private invitesUnread = new Set<string>();
     /** Repairs of the account's direct list that are running now, so opening a chat can wait for them. */
     /** The repairs of the account's direct list that are running, each with the rooms it is working on. */
     private directRepairs = new Map<Promise<unknown>, string[]>();
@@ -285,7 +287,7 @@ export class MatrixChatConnection implements ChatConnectionInterface {
         const client = this.client;
         const userId = client?.getUserId();
         if (!client || !userId) return;
-        forgetRememberedRooms(client, userId).catch((error: unknown) => {
+        forgetRememberedRoomsAndRetry(client, userId).catch((error: unknown) => {
             console.warn("Could not forget the rooms that were left", error);
         });
     }
@@ -1048,6 +1050,8 @@ export class MatrixChatConnection implements ChatConnectionInterface {
 
         // A room still being checked could be this chat: making one now would leave two when the check is over.
         if (this.repairsRunningFor(userToInvite).length > 0) throw new ChatsStillLoadingError();
+        // So could a room whose check failed (the server did not answer): it is read again on the next press.
+        if (this.unreadRoomsFor(userToInvite).length > 0) throw new ChatsStillLoadingError();
 
         this.startRoomCreation();
 
@@ -1147,6 +1151,11 @@ export class MatrixChatConnection implements ChatConnectionInterface {
             if (roomIds.some((roomId) => this.couldBeChatWith(roomId, userId))) repairs.push(repair);
         }
         return repairs;
+    }
+
+    /** The rooms whose first invite could not be read and that could be my chat with that person. */
+    private unreadRoomsFor(userId: string): string[] {
+        return Array.from(this.invitesUnread).filter((roomId) => this.couldBeChatWith(roomId, userId));
     }
 
     /** Whether the room has that person in it, or does not say yet who the other person is. */
@@ -1267,6 +1276,9 @@ export class MatrixChatConnection implements ChatConnectionInterface {
                 missing.map(({ roomId }) => roomId)
             );
         }
+        // A room that failed its check and is not read again now no longer could be a chat (it was listed, or has more
+        // people now), or is being read already (and is waited for like any other).
+        for (const roomId of this.invitesUnread) if (!toCheck.includes(roomId)) this.invitesUnread.delete(roomId);
         if (toCheck.length > 0) void this.repairFromFirstInvites(toCheck);
     }
 
@@ -1281,6 +1293,7 @@ export class MatrixChatConnection implements ChatConnectionInterface {
         const checks = roomIds.map(async (roomId) => {
             try {
                 const { chunk } = await client.createMessagesRequest(roomId, null, 12, Direction.Forward, filter);
+                this.invitesUnread.delete(roomId);
                 const inviter = directInviterOf(chunk, myUserId);
                 if (!inviter) return undefined;
                 // The invite says this is a direct chat, so opening a chat finds it at once, even while the other
@@ -1288,8 +1301,10 @@ export class MatrixChatConnection implements ChatConnectionInterface {
                 this.rememberDirect([{ userId: inviter, roomId }]);
                 return { userId: inviter, roomId };
             } catch (error) {
-                // Looked at again on the next load.
+                // Looked at again the next time a chat is opened or the page loads; until then no chat is made
+                // with someone this room could be the chat with.
                 this.invitesChecked.delete(roomId);
+                this.invitesUnread.add(roomId);
                 console.warn("Unable to read the first invite of", roomId, error);
                 return undefined;
             }
