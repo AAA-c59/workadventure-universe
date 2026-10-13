@@ -53,6 +53,7 @@ import { MatrixChatRoomMember } from "./MatrixChatRoomMember";
 import { isInvitationGoneError } from "./isInvitationGoneError";
 import { changingMatrixAvatarStore } from "./MatrixMedia";
 import { lastMessageTimestamp } from "./lastMessageTimestamp";
+import { saveDirectRooms } from "./directRooms";
 
 /** How long leaving waits for pending invitations to be withdrawn before it leaves anyway. */
 const INVITE_WITHDRAWAL_DEADLINE_MS = 3000;
@@ -602,8 +603,16 @@ export class MatrixChatRoom
     }
 
     async joinRoom(): Promise<void> {
+        // Read before joining: the invite carries the direct flag, which the joined room may lose later.
+        const dmInviter = this.matrixRoom.getDMInviter();
         try {
             await this.matrixRoom.client.joinRoom(this.id);
+            if (dmInviter) {
+                // The person who started the chat listed it; the one who accepts lists it too, or the chat turns into a group.
+                saveDirectRooms(this.matrixRoom.client, [{ userId: dmInviter, roomId: this.id }]).catch(
+                    (error: unknown) => console.warn("Unable to list the chat as a direct chat", error)
+                );
+            }
             return;
         } catch (error) {
             console.error("Unable to join", error);

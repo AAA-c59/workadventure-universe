@@ -535,6 +535,8 @@ describe("MatrixChatConnection", () => {
                 getUserId: vi.fn().mockReturnValue("@me:matrix.test"),
                 startClient: mockStartClient,
                 createRoom: vi.fn().mockResolvedValue(expected),
+                // The account already lists the room as the chat with Alice.
+                getAccountData: vi.fn().mockReturnValue({ getContent: () => ({ AliceID: ["old_direct_room"] }) }),
             } as unknown as MatrixClient;
 
             const clientPromise = Promise.resolve(mockMatrixClient);
@@ -545,7 +547,10 @@ describe("MatrixChatConnection", () => {
             const userId = "AliceID";
             const oldDirectRoom = {
                 id: "old_direct_room",
+                members: readable([]),
+                myMembership: readable(KnownMembership.Join),
             } as unknown as MatrixChatRoom;
+            matrixChatConnection["isClientReady"] = true;
 
             const spyGetDirectRoomFor = vi.spyOn(matrixChatConnection, "getDirectRoomFor");
 
@@ -588,6 +593,7 @@ describe("MatrixChatConnection", () => {
             await clientPromise;
 
             const userId = "AliceID";
+            matrixChatConnection["isClientReady"] = true;
 
             const spyGetDirectRoomFor = vi.spyOn(matrixChatConnection, "getDirectRoomFor");
             spyGetDirectRoomFor.mockImplementation(() => undefined);
@@ -977,10 +983,18 @@ describe("MatrixChatConnection", () => {
 
         async function connectionWith(rooms: Record<string, Partial<MatrixChatRoom>>) {
             const matrixRoom = { roomId };
-            const client = { getRoom: vi.fn().mockReturnValue(matrixRoom) } as unknown as MatrixClient;
+            const client = {
+                getRoom: vi.fn().mockReturnValue(matrixRoom),
+                getAccountData: vi.fn().mockReturnValue(undefined),
+                getUserId: vi.fn().mockReturnValue("@me:matrix.test"),
+            } as unknown as MatrixClient;
             const connection = await getMatrixConnection(Promise.resolve(client));
             Object.entries(rooms).forEach(([id, room]) =>
-                connection["roomList"].set(id, { id, ...room } as unknown as MatrixChatRoom)
+                connection["roomList"].set(id, {
+                    id,
+                    myMembership: readable("leave"),
+                    ...room,
+                } as unknown as MatrixChatRoom)
             );
             const created = vi
                 .spyOn(
@@ -1032,6 +1046,8 @@ describe("MatrixChatConnection", () => {
                 const connection = await getMatrixConnection(
                     Promise.resolve({
                         getRoom: vi.fn((id: string) => ({ roomId: id })),
+                        getAccountData: vi.fn().mockReturnValue(undefined),
+                        getUserId: vi.fn().mockReturnValue("@me:matrix.test"),
                     } as unknown as MatrixClient)
                 );
                 Object.entries(folders).forEach(([id, folder]) => connection["roomFolders"].set(id, folder));
