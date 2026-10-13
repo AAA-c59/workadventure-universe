@@ -164,6 +164,31 @@
         return { duration: 300, css: (t) => `transform: translateY(${from + (1 - t) * 80}px); opacity: ${t};` };
     }
 
+    // Keyboard and screen readers: the guide takes focus when it opens (on its close button), Escape closes it, and
+    // focus goes back to the profile button when it closes. The guide never blocks the game behind it.
+    const profileButtonSelector = '[data-testid="action-user"] .profile-button';
+    function takeFocus(node: HTMLElement) {
+        const closeButton =
+            node.querySelector<HTMLElement>(".u-close") ??
+            node.querySelector<HTMLElement>('[data-testid="install-guide-close"]');
+        closeButton?.focus({ preventScroll: true });
+        return {
+            destroy() {
+                // Only when the focus was still on the guide (or lost with it): never pull it away from where the
+                // player has moved on to.
+                const active = document.activeElement;
+                if (active && active !== document.body && !node.contains(active)) return;
+                document.querySelector<HTMLElement>(profileButtonSelector)?.focus({ preventScroll: true });
+            },
+        };
+    }
+
+    function closeOnEscape(event: KeyboardEvent) {
+        if (event.key !== "Escape" || $guideOpenStore === undefined) return;
+        event.stopPropagation();
+        installApp.closeGuide();
+    }
+
     let copied = false;
     let copiedTimer: ReturnType<typeof setTimeout> | undefined;
     async function copyLink() {
@@ -177,6 +202,8 @@
         }
     }
 </script>
+
+<svelte:window on:keydown={closeOnEscape} />
 
 {#if iosGuide !== undefined}
     <!-- iPhone and iPad: a sheet at the bottom of the page, over the game's buttons. Chrome and Safari on iPad have a
@@ -193,6 +220,7 @@
         role="dialog"
         aria-label={iosGuide.text.title()}
         data-testid="install-guide"
+        use:takeFocus
         in:fly={{ y: 80, duration: 300 }}
         out:sheetOut
         on:outroend={() => (dragY = 0)}
@@ -272,6 +300,7 @@
         role="dialog"
         aria-label={$LL.install.guide.openInSafari.title()}
         data-testid="install-guide"
+        use:takeFocus
         transition:fly={{ y: -50, duration: 300 }}
     >
         <div class="flex items-center gap-3">
@@ -318,6 +347,7 @@
         role="dialog"
         aria-label={browserSheet.title}
         data-testid="install-guide"
+        use:takeFocus
         transition:fly={{ y: browserSheet.place === "bottom" ? 80 : -50, duration: 300 }}
     >
         <div class="mb-0.5 flex items-center gap-3">
@@ -387,6 +417,7 @@
         role="dialog"
         aria-label={$LL.install.guide.macSafari.title()}
         data-testid="install-guide"
+        use:takeFocus
         transition:fly={{ y: -50, duration: 300 }}
     >
         <div class="flex items-center gap-3">
