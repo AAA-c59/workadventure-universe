@@ -120,7 +120,11 @@ export interface ChatRoomMembershipManagement {
     readonly myMembership: Readable<ChatRoomMembership>;
     readonly members: Readable<ChatRoomMember[]>;
     readonly joinRoom: () => Promise<void>;
-    readonly leaveRoom: () => Promise<void>;
+    /**
+     * Leaves the room. With `forget` it also forgets it, so it is gone from this person's apps for good (a deleted chat),
+     * not left behind as an empty room.
+     */
+    readonly leaveRoom: (options?: { forget?: boolean }) => Promise<void>;
 }
 
 export interface ChatRoomNotificationControl {
