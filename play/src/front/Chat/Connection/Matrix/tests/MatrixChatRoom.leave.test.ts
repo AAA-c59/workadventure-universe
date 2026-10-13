@@ -142,9 +142,40 @@ describe("MatrixChatRoom.leaveRoom", () => {
             await build("!b:matrix.test").leaveRoom({ forget: true });
             expect(forget).toHaveBeenCalledTimes(2);
 
-            await vi.advanceTimersByTimeAsync(60_000);
+            await vi.advanceTimersByTimeAsync(10_000);
             // One retry pass tried both; a timer each would have gone through the list twice.
             expect(forget).toHaveBeenCalledTimes(4);
+            // Run the chain of tries to its end, so no later test finds it still waiting.
+            await vi.advanceTimersByTimeAsync(600_000);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it("keeps trying with a growing wait when the retry fails too, until the room is forgotten, with no reload", async () => {
+        vi.useFakeTimers();
+        try {
+            localStorage.clear();
+            // The first try (the delete itself) and the first retry fail; the third works.
+            forget.mockImplementationOnce(() => Promise.reject(new Error("offline")));
+            forget.mockImplementationOnce(() => Promise.reject(new Error("offline")));
+
+            await build().leaveRoom({ forget: true });
+            expect(forget).toHaveBeenCalledTimes(1);
+
+            await vi.advanceTimersByTimeAsync(10_000);
+            expect(forget).toHaveBeenCalledTimes(2);
+            // The next wait is longer than the first one.
+            await vi.advanceTimersByTimeAsync(29_000);
+            expect(forget).toHaveBeenCalledTimes(2);
+            await vi.advanceTimersByTimeAsync(1000);
+            expect(forget).toHaveBeenCalledTimes(3);
+            expect(forget).toHaveBeenLastCalledWith("!dm:matrix.test");
+            expect(localStorage.length).toBe(0);
+
+            // Forgotten: nothing is tried again.
+            await vi.advanceTimersByTimeAsync(600_000);
+            expect(forget).toHaveBeenCalledTimes(3);
         } finally {
             vi.useRealTimers();
         }

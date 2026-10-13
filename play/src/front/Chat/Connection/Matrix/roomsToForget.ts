@@ -3,6 +3,8 @@ import type { MatrixClient } from "matrix-js-sdk";
 const STORAGE_PREFIX = "universe:matrix:rooms-to-forget:";
 /** A room that still cannot be forgotten after this many tries is let go (it is gone, or the server keeps refusing). */
 const MAX_ATTEMPTS = 5;
+/** How long to wait before each new try while rooms are still written down. The last wait is kept after that. */
+export const FORGET_RETRY_DELAYS_MS = [10_000, 30_000, 60_000, 120_000, 300_000];
 
 interface RoomToForget {
     roomId: string;
@@ -86,4 +88,34 @@ export function forgetRememberedRooms(client: ForgetClient, userId: string): Pro
     });
     running.set(userId, run);
     return run;
+}
+
+/** One chain of tries is waiting per account: several deleted chats share it, so they do not use up each other's tries. */
+const retryChains = new Set<string>();
+
+/**
+ * Tries again to forget the rooms written down for that account, with a growing wait, for as long as some are still
+ * written down (a room is let go after its last allowed try, see `forgetRememberedRooms`). Without this a server that
+ * stays down for a while would leave the room in other apps until the next start or reconnect.
+ */
+export function retryForgettingRememberedRooms(client: ForgetClient, userId: string): void {
+    if (retryChains.has(userId)) return;
+    retryChains.add(userId);
+    scheduleRetry(client, userId, 0);
+}
+
+function scheduleRetry(client: ForgetClient, userId: string, step: number): void {
+    const delay = FORGET_RETRY_DELAYS_MS[Math.min(step, FORGET_RETRY_DELAYS_MS.length - 1)];
+    setTimeout(() => {
+        const retry = async () => {
+            try {
+                await forgetRememberedRooms(client, userId);
+            } catch (error) {
+                console.warn("Could not forget the rooms that were left", error);
+            }
+            if (read(userId).length > 0) scheduleRetry(client, userId, step + 1);
+            else retryChains.delete(userId);
+        };
+        void retry();
+    }, delay);
 }

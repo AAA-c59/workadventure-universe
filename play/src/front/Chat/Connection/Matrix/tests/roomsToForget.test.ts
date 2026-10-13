@@ -1,6 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MatrixClient } from "matrix-js-sdk";
-import { forgetRememberedRooms, rememberRoomToForget } from "../roomsToForget";
+import {
+    FORGET_RETRY_DELAYS_MS,
+    forgetRememberedRooms,
+    rememberRoomToForget,
+    retryForgettingRememberedRooms,
+} from "../roomsToForget";
 
 const me = "@me:matrix.test";
 
@@ -149,5 +154,69 @@ describe("rooms that were left but could not be forgotten", () => {
         await forgetRememberedRooms(client, me);
 
         expect(forget).not.toHaveBeenCalled();
+    });
+
+    describe("trying again while the tab stays open", () => {
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+
+        it("waits longer before each new try", () => {
+            expect(FORGET_RETRY_DELAYS_MS).toEqual([10_000, 30_000, 60_000, 120_000, 300_000]);
+        });
+
+        it("tries again after every wait until the room is forgotten, then stops", async () => {
+            vi.useFakeTimers();
+            rememberRoomToForget(me, "!a:matrix.test");
+            const failures = [new Error("offline"), new Error("offline")];
+            const { client, forget } = fakeClient({
+                forget: () => {
+                    const failure = failures.shift();
+                    return failure ? Promise.reject(failure) : Promise.resolve({});
+                },
+            });
+
+            retryForgettingRememberedRooms(client, me);
+            await vi.advanceTimersByTimeAsync(9_999);
+            expect(forget).not.toHaveBeenCalled();
+            await vi.advanceTimersByTimeAsync(1);
+            expect(forget).toHaveBeenCalledTimes(1);
+            await vi.advanceTimersByTimeAsync(29_999);
+            expect(forget).toHaveBeenCalledTimes(1);
+            await vi.advanceTimersByTimeAsync(1);
+            expect(forget).toHaveBeenCalledTimes(2);
+            await vi.advanceTimersByTimeAsync(59_999);
+            expect(forget).toHaveBeenCalledTimes(2);
+            await vi.advanceTimersByTimeAsync(1);
+            expect(forget).toHaveBeenCalledTimes(3);
+            expect(localStorage.length).toBe(0);
+
+            await vi.advanceTimersByTimeAsync(600_000);
+            expect(forget).toHaveBeenCalledTimes(3);
+        });
+
+        it("has one chain of tries per account, however many rooms ask", async () => {
+            vi.useFakeTimers();
+            rememberRoomToForget(me, "!a:matrix.test");
+            const { client, forget } = fakeClient();
+
+            retryForgettingRememberedRooms(client, me);
+            retryForgettingRememberedRooms(client, me);
+            await vi.advanceTimersByTimeAsync(600_000);
+
+            expect(forget).toHaveBeenCalledOnce();
+        });
+
+        it("lets a room go after its fifth try in all, and the chain ends with it", async () => {
+            vi.useFakeTimers();
+            rememberRoomToForget(me, "!a:matrix.test");
+            const { client, forget } = fakeClient({ forget: () => Promise.reject(new Error("offline")) });
+
+            retryForgettingRememberedRooms(client, me);
+            await vi.advanceTimersByTimeAsync(3_600_000);
+
+            expect(forget).toHaveBeenCalledTimes(4);
+            expect(localStorage.length).toBe(0);
+        });
     });
 });
