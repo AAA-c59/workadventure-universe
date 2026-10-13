@@ -1,5 +1,7 @@
 <script lang="ts">
-    import { getContext, onDestroy, onMount } from "svelte";
+    import { getContext, hasContext, onDestroy, onMount } from "svelte";
+    import { readable } from "svelte/store";
+    import type { Readable } from "svelte/store";
     import { openModal } from "svelte-modals";
     import type {
         ChatRoomMembershipManagement,
@@ -19,6 +21,7 @@
     import { openProfileRoomIdStore } from "../../../Stores/PartnerProfileStore";
     import { friendsEnabledStore, relationshipsStore } from "../../../Stores/FriendsStore";
     import { invitesEnabledStore } from "../../../Stores/RingStore";
+    import { NAME_BY_CHAT_ID_CONTEXT, personName } from "../../../Stores/ChatUserWokaStore";
     import { directPartnerStore } from "../DirectChat/DirectPartnerStore";
     import { partnerStillInChat } from "../DirectChat/partnerStillInChat";
     import {
@@ -63,10 +66,16 @@
     // The delete text differs once the other person has already deleted the chat.
     const partnerHolds = partnerStillInChat(room.members, localUserStore.getChatId());
 
+    // The name they go by now, like the chat's header and profile: the room keeps the name it had when it was made.
+    const nameByChatId: Readable<Map<string, string>> = hasContext(NAME_BY_CHAT_ID_CONTEXT)
+        ? getContext(NAME_BY_CHAT_ID_CONTEXT)
+        : readable(new Map<string, string>());
+    $: name = personName($nameByChatId, $partner?.chatId, $roomName);
+
     // Invite and Add friend need the person's account, which the chat finds even when they're in another world.
     $: canInvite = $partner ? canInvitePartner($partner, $invitesEnabledStore) : false;
     $: friendAction = $partner
-        ? partnerFriendAction($partner, $roomName, $friendsEnabledStore, $relationshipsStore, $LL)
+        ? partnerFriendAction($partner, name, $friendsEnabledStore, $relationshipsStore, $LL)
         : undefined;
 
     // Inside the one chat list, the list holds its order still while this menu is open.
@@ -147,7 +156,7 @@
     }
 
     function invite() {
-        if ($partner) invitePartner($partner, $roomName);
+        if ($partner) invitePartner($partner, name);
         toggleRoomOptions();
     }
 
@@ -162,7 +171,7 @@
     }
 
     function locate() {
-        if ($partner) locatePartner($partner, $roomName);
+        if ($partner) locatePartner($partner, name);
         toggleRoomOptions();
     }
 
@@ -262,8 +271,8 @@
                 <span class="font-bold">{$LL.chat.directChat.deleteChat.confirm()}</span>
                 <span class="max-w-56 text-xs text-white/60"
                     >{$partnerHolds
-                        ? $LL.chat.directChat.deleteChat.hint({ name: $roomName })
-                        : $LL.chat.directChat.deleteChat.hintGone({ name: $roomName })}</span
+                        ? $LL.chat.directChat.deleteChat.hint({ name })
+                        : $LL.chat.directChat.deleteChat.hintGone({ name })}</span
                 >
                 <div class="flex gap-2">
                     <button
