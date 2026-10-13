@@ -48,25 +48,39 @@ export function rememberRoomToForget(userId: string, roomId: string): void {
 /** Runs of one account do not overlap: two at once would try the same rooms twice and count their attempts twice. */
 const running = new Map<string, Promise<void>>();
 
-/** Forgets the rooms written down for that account. A room that is joined or invited again is no longer one to forget. */
+/**
+ * Forgets the rooms written down for that account. A room that shows as joined or invited is not forgotten now: the
+ * client's own copy of the membership lags behind a leave until the next sync, so the room is kept for a later run
+ * (and let go after the same number of tries as any other, which covers a room that really was joined again).
+ */
 export function forgetRememberedRooms(client: ForgetClient, userId: string): Promise<void> {
     const current = running.get(userId);
     if (current) return current;
     const run = (async () => {
+        const started = read(userId);
         const kept: RoomToForget[] = [];
-        for (const entry of read(userId)) {
+        const retryLater = (entry: RoomToForget) => {
+            if (entry.attempts + 1 < MAX_ATTEMPTS) kept.push({ ...entry, attempts: entry.attempts + 1 });
+        };
+        for (const entry of started) {
             const membership = client.getRoom(entry.roomId)?.getMyMembership();
-            if (membership === "join" || membership === "invite") continue;
+            if (membership === "join" || membership === "invite") {
+                retryLater(entry);
+                continue;
+            }
             try {
                 // One room at a time, so a bad network does not send them all at once.
                 // eslint-disable-next-line no-await-in-loop
                 await client.forget(entry.roomId);
             } catch (error) {
                 console.warn("Could not forget a room that was left", error);
-                if (entry.attempts + 1 < MAX_ATTEMPTS) kept.push({ ...entry, attempts: entry.attempts + 1 });
+                retryLater(entry);
             }
         }
-        write(userId, kept);
+        // Rooms written down while this run was going are not in `started`: they must survive the write.
+        const startedIds = new Set(started.map((entry) => entry.roomId));
+        const addedMeanwhile = read(userId).filter((entry) => !startedIds.has(entry.roomId));
+        write(userId, [...kept, ...addedMeanwhile]);
     })().finally(() => {
         running.delete(userId);
     });
