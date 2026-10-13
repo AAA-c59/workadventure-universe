@@ -49,6 +49,7 @@ import { axiosToPusher, axiosWithRetry } from "./AxiosUtils";
 import { Room } from "./Room";
 import { LocalUser } from "./LocalUser";
 import { localUserStore } from "./LocalUserStore";
+import { shouldSaveNameOnServer } from "./LocalUserUtils";
 import type { OnConnectInterface, PositionInterface, ViewportInterface } from "./ConnexionModels";
 import { RoomConnection } from "./RoomConnection";
 import { watchConnectAttempt } from "./ConnectAttemptWatch";
@@ -883,7 +884,13 @@ class ConnectionManager {
     }
 
     async saveName(name: string): Promise<boolean> {
-        if (hasCapability("api/save-name") && this.authToken !== undefined) {
+        if (
+            shouldSaveNameOnServer({
+                hasNameCapability: hasCapability("api/save-name"),
+                hasAuthToken: this.authToken !== undefined,
+                isSignedIn: localUserStore.isLogged(),
+            })
+        ) {
             try {
                 await axiosToPusher.post(
                     "save-name",

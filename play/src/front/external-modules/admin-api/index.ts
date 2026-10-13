@@ -361,7 +361,7 @@ function applyPendingPlayerName() {
     if (!name || name === gameManager.getPlayerName()) return;
     gameManager.setPlayerName(name);
     // Signed-in players get their name from the server, which Orbit already updated; others keep it locally.
-    if (!hasCapability("api/save-name")) localUserStore.setName(name);
+    if (!hasCapability("api/save-name") || !localUserStore.isLogged()) localUserStore.setName(name);
     gameManager.rejoinCurrentRoom();
 }
 
