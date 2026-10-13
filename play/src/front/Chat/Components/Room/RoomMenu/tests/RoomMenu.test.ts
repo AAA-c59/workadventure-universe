@@ -51,14 +51,21 @@ vi.mock("../../../../../../i18n/i18n-svelte", () => {
     return { default: readable(text([])), LL: readable(text([])) };
 });
 
-import { IconDots } from "@wa-icons";
-import type { ChatRoom } from "../../../../Connection/ChatConnection";
+import type {
+    ChatRoom,
+    ChatRoomMembershipManagement,
+    ChatRoomModeration,
+    ChatRoomNotificationControl,
+} from "../../../../Connection/ChatConnection";
 import { NAME_BY_CHAT_ID_CONTEXT } from "../../../../Stores/ChatUserWokaStore";
 import RoomMenu from "../RoomMenu.svelte";
+import { IconDots } from "@wa-icons";
 
 icon.component = IconDots;
 
-function directRoom(name: string): ChatRoom {
+type MenuRoom = ChatRoom & ChatRoomMembershipManagement & ChatRoomNotificationControl & ChatRoomModeration;
+
+function directRoom(name: string): MenuRoom {
     return {
         id: "!dm:chat.example.com",
         type: "direct",
@@ -66,7 +73,7 @@ function directRoom(name: string): ChatRoom {
         members: readable([]),
         areNotificationsMuted: writable(false),
         hasPermissionTo: () => readable(false),
-    } as unknown as ChatRoom;
+    } as unknown as MenuRoom;
 }
 
 describe("a direct chat's ⋯ menu", () => {
