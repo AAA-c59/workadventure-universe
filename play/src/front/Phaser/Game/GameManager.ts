@@ -251,7 +251,10 @@ export class GameManager {
         this.scenePlugin.run(
             scenes[
                 stepAfterName({
-                    characterTextureIds: this.characterTextureIds,
+                    // The device's Woka too: a guest back from a login got theirs restored there after this was read.
+                    characterTextureIds: this.characterTextureIds?.length
+                        ? this.characterTextureIds
+                        : localUserStore.getCharacterTextures(),
                     loadNextScene: this.loadNextScene,
                 })
             ]
