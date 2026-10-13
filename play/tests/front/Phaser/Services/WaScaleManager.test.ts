@@ -43,11 +43,14 @@ function makeGame(camera = makeCamera()) {
             this.zoom = zoom;
         }),
         refresh: vi.fn(),
+        on: vi.fn(),
+        off: vi.fn(),
     };
     const scene = { cameras: { main: camera, cameras: [camera] } };
     camera.scene = scene as unknown as Phaser.Scene;
     const game = {
         scale,
+        domContainer: { style: { transform: "" } },
         scene: { getScenes: vi.fn(() => [scene]) },
         events: { emit: vi.fn() },
         markDirty: vi.fn(),
@@ -257,6 +260,84 @@ describe("WaScaleManager camera continuity during resize", () => {
             width: 4000,
             height: 2000,
         });
+    });
+});
+
+describe("WaScaleManager DOM layer scale", () => {
+    beforeEach(() => {
+        viewport.width = 1280;
+        viewport.height = 720;
+        vi.stubGlobal("window", { devicePixelRatio: 1 });
+    });
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    // Phaser's refresh() sets the DOM layer's scale to displaySize / baseSize, from its own zoom.
+    function emulatePhaserRefresh(fixture: ReturnType<typeof makeManager>) {
+        fixture.scale.refresh.mockImplementation(() => {
+            fixture.game.domContainer.style.transform = `scale(${fixture.scale.zoom})`;
+        });
+    }
+
+    it("keeps the DOM layer unscaled while the zoom goes through the camera", () => {
+        const fixture = makeManager();
+        emulatePhaserRefresh(fixture);
+        fixture.manager.setZoomModifier(0.4, asCamera(fixture.camera));
+
+        expect(fixture.camera.zoom).toBeCloseTo(0.6);
+        // Phaser alone would leave `scale(0.6, 0.6)` here: the names would sit 40% closer to the top left.
+        const [x, y] = /scale\(([\d.]+), ([\d.]+)\)/
+            .exec(fixture.game.domContainer.style.transform)!
+            .slice(1)
+            .map(Number);
+        expect(x).toBeCloseTo(1, 2);
+        expect(y).toBeCloseTo(1, 2);
+    });
+
+    it("scales the DOM layer down by the pixel ratio when the zoom goes through the camera", () => {
+        vi.stubGlobal("window", { devicePixelRatio: 2 });
+        viewport.width = 640;
+        viewport.height = 360;
+        const fixture = makeManager();
+        emulatePhaserRefresh(fixture);
+        fixture.manager.setZoomModifier(0.4, asCamera(fixture.camera));
+
+        const [x] = /scale\(([\d.]+), ([\d.]+)\)/.exec(fixture.game.domContainer.style.transform)!.slice(1).map(Number);
+        expect(x).toBeCloseTo(0.5, 2);
+    });
+
+    it("puts the DOM layer's scale back when Phaser refreshes it on its own", () => {
+        const fixture = makeManager();
+        emulatePhaserRefresh(fixture);
+        fixture.manager.setZoomModifier(0.4, asCamera(fixture.camera));
+
+        const onResize = fixture.scale.on.mock.calls.find(([event]) => event === "resize")?.[1] as () => void;
+        expect(onResize).toBeTypeOf("function");
+        fixture.game.domContainer.style.transform = "scale(0.6, 0.6)";
+        onResize();
+        expect(fixture.game.domContainer.style.transform).toMatch(/^scale\(1(\.\d+)?, 1(\.\d+)?\)$/);
+    });
+
+    it("leaves Phaser's own DOM layer scale alone while the canvas is scaled", () => {
+        const fixture = makeManager();
+        emulatePhaserRefresh(fixture);
+        fixture.manager.setZoomModifier(1, asCamera(fixture.camera));
+
+        expect(fixture.camera.zoom).toBe(1);
+        expect(fixture.game.domContainer.style.transform).toBe(`scale(${fixture.scale.zoom})`);
+        const onResize = fixture.scale.on.mock.calls.find(([event]) => event === "resize")?.[1] as () => void;
+        onResize();
+        expect(fixture.game.domContainer.style.transform).toBe(`scale(${fixture.scale.zoom})`);
+    });
+
+    it("stops listening to the previous game when the game is replaced", () => {
+        const fixture = makeManager();
+        const next = makeGame();
+        fixture.manager.setGame(next.game as unknown as Game);
+        expect(fixture.scale.off).toHaveBeenCalledWith("resize", expect.any(Function));
+        expect(next.scale.on).toHaveBeenCalledWith("resize", expect.any(Function));
     });
 });
 
