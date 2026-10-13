@@ -62,6 +62,12 @@ const PREVIOUS_EVENTS_PAGE_SIZE = 30;
 /** One load of earlier messages keeps asking until it has this many messages (reactions and deletions don't count). */
 const PREVIOUS_MESSAGES_PER_LOAD = 20;
 
+/**
+ * An event that reaches this device later than this after it was sent is catch-up (the page was reloaded, or the tab
+ * was asleep), not a message arriving now: it goes into the list but makes no sound and opens no chat.
+ */
+const FRESH_EVENT_MAX_AGE_MS = 2000;
+
 type EventId = string;
 
 type ModerationAction = "ban" | "kick" | "invite" | "redact";
@@ -98,6 +104,7 @@ export class MatrixChatRoom
     private previousMessagesLoad: Promise<void> | undefined;
 
     private handleRoomTimeline = this.onRoomTimeline.bind(this);
+    private handleRoomTimelineReset = this.onRoomTimelineReset.bind(this);
     private handleRoomName = this.onRoomName.bind(this);
     private handleRoomRedaction = this.onRoomRedaction.bind(this);
     private handleStateEvent = this.onRoomStateEvent.bind(this);
@@ -251,6 +258,7 @@ export class MatrixChatRoom
 
     private startHandlingChatRoomEvents() {
         this.matrixRoom.on(RoomEvent.Timeline, this.handleRoomTimeline);
+        this.matrixRoom.on(RoomEvent.TimelineReset, this.handleRoomTimelineReset);
         this.matrixRoom.on(RoomEvent.Name, this.handleRoomName);
         this.matrixRoom.on(RoomEvent.Redaction, this.handleRoomRedaction);
         this.matrixRoom.on(RoomStateEvent.Events, this.handleStateEvent);
@@ -296,16 +304,22 @@ export class MatrixChatRoom
         _: boolean,
         data: IRoomTimelineData
     ) {
-        //get age give the age of the event when the event arrived at the device
+        // Catch-up events (the first sync after a reload, or after the tab slept) are older than this when they
+        // arrive. They still belong in the list; they just must not ring like a new message.
         const ageOfEvent = event.getAge();
+        const isFresh = !ageOfEvent || ageOfEvent < FRESH_EVENT_MAX_AGE_MS;
 
         //Only get realtime event
-        if (toStartOfTimeline || !data || !data.liveEvent || (ageOfEvent && ageOfEvent >= 2000)) {
+        if (toStartOfTimeline || !data || !data.liveEvent) {
             return;
         }
 
-        if (room !== undefined) {
-            (async () => {
+        if (room === undefined) return;
+
+        // A catch-up event can arrive while the first load of the list is still under way: it goes in after it, never before.
+        const ready = isFresh ? Promise.resolve() : this.initialLoad;
+        ready
+            .then(async () => {
                 if (event.isEncrypted()) {
                     await this.matrixRoom.client.decryptEventIfNeeded(event);
                 }
@@ -327,15 +341,38 @@ export class MatrixChatRoom
 
                     if (this.isEventReplacingExistingOne(event)) {
                         this.handleMessageModification(event);
-                    } else {
-                        this.handleNewMessage(event);
+                    } else if (isFresh || !eventId || !this.messages.has(eventId)) {
+                        this.handleNewMessage(event, isFresh);
                     }
                 }
                 if (event.getType() === "m.reaction") {
                     this.handleNewMessageReaction(event, this.messages);
                 }
-            })().catch((error) => console.error(error));
-        }
+            })
+            .catch((error) => console.error(error));
+    }
+
+    /**
+     * The sdk started a new live timeline because the sync skipped events (a long time away, or more events than one
+     * sync returns). The list we built sits before that gap, so it is built again from the new live end, and the
+     * earlier messages, gap included, are paged in behind it.
+     */
+    private onRoomTimelineReset(): void {
+        this.initialLoad
+            .then(async () => {
+                // A page of earlier messages under way belongs to the window being replaced.
+                await this.previousMessagesLoad?.catch(() => {});
+                this.timelineWindow = new TimelineWindow(
+                    this.matrixRoom.client,
+                    this.matrixRoom.getLiveTimeline().getTimelineSet()
+                );
+                this.messages.forEach((message) => message.relations?.destroy());
+                this.messages.clear();
+                await this.initMatrixRoomMessagesAndReactions();
+                // The new end holds only what the last sync brought: read on behind it, across the gap, for a full screen.
+                if (this.messages.length < PREVIOUS_MESSAGES_PER_LOAD) await this.loadPreviousMessages();
+            })
+            .catch((error) => console.error("Failed to reload the messages after a gap", error));
     }
 
     public async retrySendingEvents(): Promise<void> {
@@ -367,7 +404,7 @@ export class MatrixChatRoom
         this.handleDeletion(event);
     }
 
-    private handleNewMessage(event: MatrixEvent) {
+    private handleNewMessage(event: MatrixEvent, isFresh = true) {
         const message = new MatrixChatMessage(event, this.matrixRoom, false, this.type === "direct");
         this.messages.push(message);
         const senderID = event.getSender();
@@ -376,7 +413,7 @@ export class MatrixChatRoom
                 return;
             }
         }
-        if (senderID !== this.matrixRoom.client.getSafeUserId() && !get(this.areNotificationsMuted)) {
+        if (isFresh && senderID !== this.matrixRoom.client.getSafeUserId() && !get(this.areNotificationsMuted)) {
             this.notifyNewMessage(message);
             if (!isAChatRoomIsVisible() && get(selectedRoomStore)?.id !== "proximity") {
                 selectedRoomStore.set(this);
@@ -815,6 +852,7 @@ export class MatrixChatRoom
 
     destroy() {
         this.matrixRoom.off(RoomEvent.Timeline, this.handleRoomTimeline);
+        this.matrixRoom.off(RoomEvent.TimelineReset, this.handleRoomTimelineReset);
         this.matrixRoom.off(RoomEvent.Name, this.handleRoomName);
         this.matrixRoom.off(RoomEvent.Redaction, this.handleRoomRedaction);
         this.matrixRoom.off(RoomStateEvent.Events, this.handleStateEvent);
