@@ -748,6 +748,111 @@ describe("MatrixChatConnection: the chat with one person", () => {
                 expect(connection["roomList"].has("!r2")).toBe(true);
                 expect(connection.getDirectRoomFor(ALICE)?.id).toBe("!r1");
             });
+
+            describe("when reading a first invite is slow", () => {
+                const BOB = "@bob:matrix.test";
+
+                /** The history of that room comes back only after that many milliseconds. */
+                function readTakes(roomId: string, milliseconds: number): void {
+                    createMessagesRequest.mockImplementation(
+                        (id: string) =>
+                            new Promise((resolve) => {
+                                setTimeout(
+                                    () => resolve({ chunk: firstEvents[id] ?? [] }),
+                                    id === roomId ? milliseconds : 0
+                                );
+                            })
+                    );
+                }
+
+                it("tells the player the chats are still loading, and makes no room, when the same person's read takes over 4 seconds", async () => {
+                    vi.useFakeTimers();
+                    try {
+                        const room = addRoom("!r1", { type: "multiple" });
+                        firstEvents["!r1"] = [directInvite(ALICE)];
+                        readTakes("!r1", 10_000);
+
+                        const opening = connection.createDirectRoom(ALICE);
+                        const failure = expect(opening).rejects.toBeInstanceOf(ChatsStillLoadingError);
+                        await vi.advanceTimersByTimeAsync(4000);
+                        await failure;
+                        expect(createRoom).not.toHaveBeenCalled();
+
+                        // The repair finishes: the second press opens the same chat, and still makes no room.
+                        await vi.advanceTimersByTimeAsync(7000);
+                        await expect(connection.createDirectRoom(ALICE)).resolves.toBe(room);
+                        expect(createRoom).not.toHaveBeenCalled();
+                        expect(createMessagesRequest).toHaveBeenCalledOnce();
+                    } finally {
+                        vi.useRealTimers();
+                    }
+                });
+
+                it("opens the chat as soon as its own read is over, without waiting for a slow unrelated room", async () => {
+                    vi.useFakeTimers();
+                    try {
+                        const room = addRoom("!r1", { type: "multiple" });
+                        firstEvents["!r1"] = [directInvite(ALICE)];
+                        addRoom("!slow", { type: "multiple", members: { [ME]: "join", [BOB]: "join" } });
+                        firstEvents["!slow"] = [directInvite(BOB)];
+                        readTakes("!slow", 60_000);
+
+                        const opening = connection.createDirectRoom(ALICE);
+                        // Far less than the 4 seconds that opening a chat is willing to wait.
+                        await vi.advanceTimersByTimeAsync(100);
+
+                        await expect(opening).resolves.toBe(room);
+                        expect(createRoom).not.toHaveBeenCalled();
+                    } finally {
+                        vi.useRealTimers();
+                    }
+                });
+
+                it("remembers a room as soon as its own invite is read, even while another room is still being read", async () => {
+                    vi.useFakeTimers();
+                    try {
+                        const room = addRoom("!r1", { type: "multiple" });
+                        firstEvents["!r1"] = [directInvite(ALICE)];
+                        addRoom("!slow", { type: "multiple", members: { [ME]: "join", [BOB]: "join" } });
+                        firstEvents["!slow"] = [directInvite(BOB)];
+                        readTakes("!slow", 60_000);
+
+                        connection["repairDirectAccountData"]();
+                        await vi.advanceTimersByTimeAsync(100);
+
+                        expect(connection.getDirectRoomFor(ALICE)).toBe(room);
+                        expect(connection.getDirectRoomFor(BOB)).toBeUndefined();
+                    } finally {
+                        vi.useRealTimers();
+                    }
+                });
+
+                it("makes a chat with someone else at once while an unrelated room is slow", async () => {
+                    vi.useFakeTimers();
+                    try {
+                        addRoom("!slow", { type: "multiple" });
+                        firstEvents["!slow"] = [directInvite(ALICE)];
+                        readTakes("!slow", 60_000);
+                        vi.spyOn(
+                            connection as unknown as { waitForNextSync: () => Promise<void> },
+                            "waitForNextSync"
+                        ).mockResolvedValue();
+                        vi.spyOn(
+                            connection as unknown as { createAndAddNewRootRoom: (room: unknown) => unknown },
+                            "createAndAddNewRootRoom"
+                        ).mockReturnValue("a chat");
+                        sdkRooms.set("!new:matrix.test", { roomId: "!new:matrix.test" });
+
+                        const opening = connection.createDirectRoom(BOB);
+                        await vi.advanceTimersByTimeAsync(100);
+
+                        await expect(opening).resolves.toBe("a chat");
+                        expect(createRoom).toHaveBeenCalledOnce();
+                    } finally {
+                        vi.useRealTimers();
+                    }
+                });
+            });
         });
     });
 });
