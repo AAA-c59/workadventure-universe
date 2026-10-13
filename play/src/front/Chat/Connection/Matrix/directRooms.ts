@@ -10,7 +10,7 @@ export interface DirectRoomCandidate<Room> {
     partnerMembership: ChatRoomMembership | undefined;
     /** People other than the two of us who are joined or invited. */
     othersHolding: number;
-    /** The room is a direct chat: typed so, listed under that person in `m.direct`, or has no name of its own. */
+    /** The room is a direct chat: typed so, or listed under that person in `m.direct`. Never guessed from the members. */
     looksDirect: boolean;
     /** When the last message was sent (the room's creation time with none), to prefer the newest of several. */
     lastActivity: number;

@@ -1147,12 +1147,8 @@ export class MatrixChatConnection implements ChatConnectionInterface {
                         member.id !== this.client?.getUserId() &&
                         ["join", "invite"].includes(get(member.membership))
                 ).length,
-                looksDirect:
-                    room.type === "direct" ||
-                    isListedAsDirect(directMap, userID, room.id) ||
-                    // A room made by other means (Element) with just the two of us and no name of its own.
-                    (sdkRoom != null &&
-                        !sdkRoom.currentState.getStateEvents(EventType.RoomName, "")?.getContent().name),
+                // Only what says "direct chat", never the number of members: a group of two stays a group.
+                looksDirect: room.type === "direct" || isListedAsDirect(directMap, userID, room.id),
                 lastActivity: room.lastMessageTimestamp,
             };
         });

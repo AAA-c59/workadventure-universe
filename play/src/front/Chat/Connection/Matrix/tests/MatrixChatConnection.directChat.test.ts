@@ -126,10 +126,10 @@ describe("MatrixChatConnection: the chat with one person", () => {
             expect(connection.getDirectRoomFor(ALICE)).toBe(room);
         });
 
-        it("finds a chat that is not typed or listed as direct when it is just the two of us and has no name", () => {
-            const room = addRoom("!chat", { type: "multiple" });
+        it("does not take a room for the chat just because it is the two of us: a group of two stays a group", () => {
+            addRoom("!group", { type: "multiple" });
 
-            expect(connection.getDirectRoomFor(ALICE)).toBe(room);
+            expect(connection.getDirectRoomFor(ALICE)).toBeUndefined();
         });
 
         it("does not take a named group of two for the chat", () => {
@@ -231,7 +231,7 @@ describe("MatrixChatConnection: the chat with one person", () => {
         });
 
         it("lists a found chat that the account does not list yet", async () => {
-            addRoom("!chat", { type: "multiple" });
+            addRoom("!chat");
 
             await connection.createDirectRoom(ALICE);
             await vi.waitFor(() => expect(directMap).toEqual({ [ALICE]: ["!chat"] }));
@@ -372,6 +372,100 @@ describe("MatrixChatConnection: the chat with one person", () => {
 
                 await expect(connection.createDirectRoom(ALICE)).rejects.toBeDefined();
             });
+        });
+    });
+
+    describe("groups are never taken for a chat, and never touched", () => {
+        function stubRoomCreation() {
+            vi.spyOn(
+                connection as unknown as { waitForNextSync: () => Promise<void> },
+                "waitForNextSync"
+            ).mockResolvedValue();
+            vi.spyOn(
+                connection as unknown as { createAndAddNewRootRoom: (room: unknown) => unknown },
+                "createAndAddNewRootRoom"
+            ).mockReturnValue("a chat");
+            sdkRooms.set("!new:matrix.test", { roomId: "!new:matrix.test" });
+        }
+
+        it("keeps two groups with the very same people apart, and finds neither as the chat", () => {
+            addRoom("!groupA", { type: "multiple", named: true });
+            addRoom("!groupB", { type: "multiple", named: true });
+            addRoom("!groupC", { type: "multiple" });
+
+            expect(connection.getDirectRoomFor(ALICE)).toBeUndefined();
+            expect(connection["roomList"].has("!groupA")).toBe(true);
+            expect(connection["roomList"].has("!groupB")).toBe(true);
+            expect(connection["roomList"].has("!groupC")).toBe(true);
+        });
+
+        it("makes a chat with a person who is only in a group with me, and leaves the group alone", async () => {
+            addRoom("!group", { type: "multiple", named: true });
+            stubRoomCreation();
+
+            await expect(connection.createDirectRoom(ALICE)).resolves.toBe("a chat");
+
+            expect(createRoom).toHaveBeenCalledOnce();
+            expect(invite).not.toHaveBeenCalled();
+            expect(connection["roomList"].has("!group")).toBe(true);
+        });
+
+        it("keeps a chat with Alice and a group of just me and Alice separate, whichever order they come in", () => {
+            const group = addRoom("!group", { type: "multiple", named: true, lastMessage: 900 });
+            const chat = addRoom("!chat", { lastMessage: 10 });
+
+            // The group has the newest message, and still is not the chat.
+            expect(connection.getDirectRoomFor(ALICE)).toBe(chat);
+            expect(connection.getDirectRoomFor(ALICE)).not.toBe(group);
+        });
+
+        it("does not invite anyone back into a group someone left", async () => {
+            addRoom("!group", { type: "multiple", named: true, members: { [ME]: "join", [ALICE]: "leave" } });
+            stubRoomCreation();
+
+            await connection.createDirectRoom(ALICE);
+
+            expect(invite).not.toHaveBeenCalled();
+            expect(createRoom).toHaveBeenCalledOnce();
+        });
+
+        it("makes a new chat after the chat is deleted while a group of the same two people remains", async () => {
+            addRoom("!group", { type: "multiple", named: true });
+            stubRoomCreation();
+
+            await connection.createDirectRoom(ALICE);
+
+            expect(createRoom).toHaveBeenCalledOnce();
+            expect(directMap).toEqual({ [ALICE]: ["!new:matrix.test"] });
+        });
+
+        it("lists a group of two as a group, not as a chat, when the account lists no chat for it", () => {
+            addRoom("!group", { type: "multiple", named: true });
+            const rooms$ = connection.rooms;
+            let listed: unknown[] = [];
+            const stop = rooms$.subscribe((value) => (listed = value));
+            stop();
+
+            expect(listed).toHaveLength(1);
+            expect(connection.getDirectRoomFor(ALICE)).toBeUndefined();
+        });
+
+        it("creating a group does not look for a chat or invite anyone back", async () => {
+            const lookup = vi.spyOn(connection, "getDirectRoomFor");
+            addRoom("!chat", { members: { [ME]: "join", [ALICE]: "leave" } });
+
+            await connection.createRoom({ name: "Team", invite: [ALICE] } as never);
+
+            expect(lookup).not.toHaveBeenCalled();
+            expect(invite).not.toHaveBeenCalled();
+            expect(createRoom).toHaveBeenCalledOnce();
+        });
+
+        it("makes the second group with the same people just like the first", async () => {
+            await connection.createRoom({ name: "Team", invite: [ALICE] } as never);
+            await connection.createRoom({ name: "Team again", invite: [ALICE] } as never);
+
+            expect(createRoom).toHaveBeenCalledTimes(2);
         });
     });
 
