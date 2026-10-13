@@ -90,6 +90,11 @@ describe("the Recent row in the WOKA picker", () => {
         return settle();
     };
 
+    it("asks for a fresh WOKA list each time it opens, so a WOKA granted meanwhile shows (#912)", async () => {
+        await open([]);
+        expect(mocks.fetchWokaData).toHaveBeenCalledWith({ fresh: true });
+    });
+
     it("is not there for a guest, or when the request failed: the grid opens on your WOKA", async () => {
         await open(undefined);
 

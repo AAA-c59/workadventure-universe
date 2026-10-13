@@ -45,7 +45,7 @@
         isLoading = true;
         error = "";
         try {
-            wokaData = await fetchWokaData();
+            wokaData = await fetchWokaData({ fresh: true });
             loadSavedTextures(wokaData);
         } catch (err) {
             console.error("Error loading Woka data:", err);
