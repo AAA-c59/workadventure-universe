@@ -31,12 +31,16 @@ function fakeEncryptedEvent() {
         on: (name: string, listener: () => void) => {
             if (name === MatrixEventEvent.Decrypted) listeners.push(listener);
         },
+        off: (name: string, listener: () => void) => {
+            const index = listeners.indexOf(listener);
+            if (name === MatrixEventEvent.Decrypted && index >= 0) listeners.splice(index, 1);
+        },
     };
     const decrypt = (clearContent: Record<string, unknown>) => {
         content = clearContent;
         listeners.forEach((listener) => listener());
     };
-    return { event: event as unknown as MatrixEvent, decrypt };
+    return { event: event as unknown as MatrixEvent, decrypt, listeners };
 }
 
 function fakeRoom(): Room {
@@ -51,6 +55,18 @@ function fakeRoom(): Room {
         getUnfilteredTimelineSet: () => ({ relations: { getChildEventsForEvent: () => undefined } }),
     } as unknown as Room;
 }
+
+describe("MatrixChatMessage replaced by a rebuilt list", () => {
+    it("stops listening to its event, which lives on, once it is destroyed", () => {
+        const { event, listeners } = fakeEncryptedEvent();
+        const message = new MatrixChatMessage(event, fakeRoom());
+        expect(listeners).toHaveLength(1);
+
+        message.destroy();
+
+        expect(listeners).toHaveLength(0);
+    });
+});
 
 describe("MatrixChatMessage decrypted after it is shown", () => {
     it.each([

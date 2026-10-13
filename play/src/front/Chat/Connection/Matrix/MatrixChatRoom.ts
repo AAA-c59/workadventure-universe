@@ -386,13 +386,13 @@ export class MatrixChatRoom
                 await this.initMatrixRoomMessagesAndReactions();
             } catch (error) {
                 // The chat keeps what the person had rather than turning empty; the next reset tries again.
-                this.messages.forEach((message) => message.relations?.destroy());
+                this.messages.forEach((message) => message.destroy());
                 this.messages.clear();
                 this.timelineWindow = previousWindow;
                 previousMessages.forEach((message) => this.messages.push(message));
                 throw error;
             }
-            previousMessages.forEach((message) => message.relations?.destroy());
+            previousMessages.forEach((message) => message.destroy());
             // The new end holds only what the last sync brought: read on behind it, across the gap, for a full screen
             // or as much history as the person had loaded.
             const wanted = Math.max(depth, PREVIOUS_MESSAGES_PER_LOAD);
@@ -897,7 +897,7 @@ export class MatrixChatRoom
             member.destroy();
         });
         this.messages.forEach((message) => {
-            message.relations?.destroy();
+            message.destroy();
         });
     }
 

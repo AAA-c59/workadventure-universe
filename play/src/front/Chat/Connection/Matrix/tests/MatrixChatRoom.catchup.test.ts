@@ -91,6 +91,7 @@ vi.mock("../MatrixChatMessage", () => ({
         constructor(event: { getId: () => string }) {
             this.id = event.getId();
         }
+        destroy = vi.fn();
     },
 }));
 vi.mock("../MatrixChatMessageReaction", () => ({ MatrixChatMessageReaction: class {} }));
