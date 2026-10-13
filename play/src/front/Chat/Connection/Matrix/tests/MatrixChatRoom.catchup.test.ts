@@ -285,6 +285,19 @@ describe("MatrixChatRoom catching up after a reload or a sleeping tab", () => {
             expect(new Set(shown).size).toBe(shown.length);
         });
 
+        it("keeps the messages the person had when the list cannot be built again", async () => {
+            const all = Array.from({ length: 3 }, () => message());
+            const room = await roomWithSavedCopy(all, 3);
+            const before = ids(room);
+            expect(before).toHaveLength(3);
+
+            timeline.loadError = new Error("offline");
+            emitTimelineReset();
+            await settle();
+
+            expect(ids(room)).toEqual(before);
+        });
+
         it("keeps the order when a message arrives while the list is being built again", async () => {
             const all = Array.from({ length: 3 }, () => message());
             const room = await roomWithSavedCopy(all, 1);
