@@ -1,3 +1,4 @@
+import { Method } from "matrix-js-sdk";
 import type { MatrixClient } from "matrix-js-sdk";
 import type { ChatRoomMembership } from "../ChatConnection";
 
@@ -74,52 +75,42 @@ export function withDirectRoom(
     return { ...directMap, [userId]: [...(directMap?.[userId] ?? []), roomId] };
 }
 
-type DirectAccountDataClient = Pick<MatrixClient, "getAccountData" | "setAccountData">;
+type DirectAccountDataClient = Pick<MatrixClient, "getSafeUserId" | "setAccountData"> & {
+    http: Pick<MatrixClient["http"], "authedRequest">;
+};
 
 /** Saves go one after the other per client: each one replaces the whole list, so two at once would lose one. */
 const pendingSaves = new WeakMap<DirectAccountDataClient, Promise<unknown>>();
 
 /**
- * What the last save wrote, until the client's own copy shows it. The client updates its copy of the account data when
- * the next sync brings it back, not when the save returns, so a save right after another would not see the first.
+ * The account's list as the server has it right now. The client's own copy only changes when the next sync brings it,
+ * so after a save, or a save from another device, it is out of date and writing from it would drop rooms.
  */
-const lastWritten = new WeakMap<DirectAccountDataClient, { map: DirectMap; at: number }>();
-/** The sync that brings a save back comes within seconds; after this long the client's own copy is believed again. */
-const ECHO_WAIT_MS = 30_000;
-
-function includesAll(map: DirectMap | undefined, wanted: DirectMap): boolean {
-    return Object.entries(wanted).every(([userId, roomIds]) =>
-        (roomIds ?? []).every((roomId) => isListedAsDirect(map, userId, roomId))
-    );
-}
-
-/** Both lists in one: every room either one has, under the person it has it under. */
-function unionOf(a: DirectMap | undefined, b: DirectMap | undefined): DirectMap | undefined {
-    if (!a || !b) return a ?? b;
-    const merged: DirectMap = { ...a };
-    for (const [userId, roomIds] of Object.entries(b)) {
-        merged[userId] = Array.from(new Set([...(merged[userId] ?? []), ...(roomIds ?? [])]));
+async function readDirectMapFromServer(client: DirectAccountDataClient): Promise<DirectMap | undefined> {
+    try {
+        return await client.http.authedRequest<DirectMap>(
+            Method.Get,
+            `/user/${encodeURIComponent(client.getSafeUserId())}/account_data/m.direct`
+        );
+    } catch (error) {
+        // No list saved yet: this is the first one.
+        if ((error as { data?: { errcode?: string } }).data?.errcode === "M_NOT_FOUND") return undefined;
+        throw error;
     }
-    return merged;
 }
 
 /**
  * Lists the rooms under their person in the account's `m.direct`, in one save, and only the ones that are not there yet.
  * Other apps and the other chats of the account read this list to know which rooms are direct chats.
+ * The list is read from the server just before it is written; when it cannot be read nothing is written, since a
+ * guess could drop rooms another device added (the save is tried again on the next load).
  */
 export function saveDirectRooms(
     client: DirectAccountDataClient,
     rooms: { userId: string; roomId: string }[]
 ): Promise<void> {
     const save = async (): Promise<void> => {
-        const known = client.getAccountData("m.direct")?.getContent<DirectMap>() ?? undefined;
-        const written = lastWritten.get(client);
-        // Once the client shows what was written, or has had time to, its own copy is the truth again (others may
-        // have changed it since).
-        if (written && (includesAll(known, written.map) || Date.now() - written.at > ECHO_WAIT_MS)) {
-            lastWritten.delete(client);
-        }
-        let directMap = lastWritten.has(client) ? unionOf(known, written?.map) : known;
+        let directMap = await readDirectMapFromServer(client);
         let changed = false;
         for (const { userId, roomId } of rooms) {
             const next = withDirectRoom(directMap, userId, roomId);
@@ -129,7 +120,6 @@ export function saveDirectRooms(
         }
         if (!changed) return;
         await client.setAccountData("m.direct", directMap as DirectMap);
-        lastWritten.set(client, { map: directMap as DirectMap, at: Date.now() });
     };
     const run = (pendingSaves.get(client) ?? Promise.resolve()).then(save, save);
     pendingSaves.set(
@@ -148,14 +138,19 @@ export interface InviteEventLike {
 }
 
 /**
- * Who invited me to this room as a direct chat, from the start of its history: the invite of mine that carried
- * `is_direct`. Unlike the flag the sdk keeps on my member event, this does not get lost when my profile changes.
+ * The other person of a direct chat, from the start of its history: the invite of mine that carried `is_direct`
+ * (someone invited me), or the direct invite I sent (I made the chat). Unlike the flag the sdk keeps on my member
+ * event, this does not get lost when my profile changes, and it finds a chat I made whose listing failed.
  */
 export function directInviterOf(events: readonly InviteEventLike[], myUserId: string): string | undefined {
     for (const event of events) {
-        if (event.type !== "m.room.member" || event.state_key !== myUserId) continue;
+        if (event.type !== "m.room.member") continue;
         if (event.content?.membership !== "invite" || event.content.is_direct !== true) continue;
-        if (event.sender && event.sender !== myUserId) return event.sender;
+        if (event.state_key === myUserId) {
+            if (event.sender && event.sender !== myUserId) return event.sender;
+        } else if (event.sender === myUserId && event.state_key) {
+            return event.state_key;
+        }
     }
     return undefined;
 }

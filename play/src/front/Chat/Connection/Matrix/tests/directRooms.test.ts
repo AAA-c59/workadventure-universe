@@ -111,10 +111,18 @@ describe("the list of direct chats", () => {
 });
 
 describe("saveDirectRooms", () => {
+    /** The server holds the list; the client's own copy is never read (it lags until the next sync). */
     function clientWith(initial: Record<string, string[]> | undefined) {
         let content = initial;
         return {
-            getAccountData: vi.fn(() => (content ? { getContent: () => content } : undefined)),
+            getSafeUserId: () => "@me:x",
+            http: {
+                authedRequest: vi.fn(() =>
+                    content
+                        ? Promise.resolve(content)
+                        : Promise.reject(Object.assign(new Error("not found"), { data: { errcode: "M_NOT_FOUND" } }))
+                ),
+            },
             setAccountData: vi.fn(async (_type: string, next: Record<string, string[]>) => {
                 // A save takes a moment on the server; the list changes when it is done.
                 await new Promise<void>((resolve) => {
@@ -123,6 +131,9 @@ describe("saveDirectRooms", () => {
                 content = next;
                 return {};
             }),
+            set server(next: Record<string, string[]>) {
+                content = next;
+            },
         };
     }
 
@@ -138,6 +149,14 @@ describe("saveDirectRooms", () => {
             "@a:x": ["!1", "!2"],
             "@b:x": ["!3"],
         });
+    });
+
+    it("reads the list for the right account", async () => {
+        const client = clientWith({});
+
+        await saveDirectRooms(client as never, [{ userId: "@a:x", roomId: "!1" }]);
+
+        expect(client.http.authedRequest).toHaveBeenCalledWith("GET", "/user/%40me%3Ax/account_data/m.direct");
     });
 
     it("saves nothing when everything is listed already", async () => {
@@ -168,47 +187,28 @@ describe("saveDirectRooms", () => {
         expect(client.setAccountData).toHaveBeenLastCalledWith("m.direct", { "@a:x": ["!1"], "@b:x": ["!2"] });
     });
 
-    it("does not lose a room when the client has not yet got the first save back from the server", async () => {
-        // The client's copy of the account data only changes when the next sync brings it, not when a save returns.
-        const stale: Record<string, string[]> = { "@a:x": ["!1"] };
-        const writes: Record<string, string[]>[] = [];
-        const client = {
-            getAccountData: vi.fn(() => ({ getContent: () => stale })),
-            setAccountData: vi.fn((_type: string, next: Record<string, string[]>) => {
-                writes.push(next);
-                return Promise.resolve({});
-            }),
-        };
-
+    it("keeps a room another device saved a long time after this one last looked", async () => {
+        const client = clientWith({ "@a:x": ["!1"] });
         await saveDirectRooms(client as never, [{ userId: "@a:x", roomId: "!2" }]);
+
+        // Another device lists a chat, and this one has not synced for a long time.
+        client.server = { "@a:x": ["!1", "!2"], "@c:x": ["!9"] };
         await saveDirectRooms(client as never, [{ userId: "@b:x", roomId: "!3" }]);
 
-        expect(writes[1]).toEqual({ "@a:x": ["!1", "!2"], "@b:x": ["!3"] });
+        expect(client.setAccountData).toHaveBeenLastCalledWith("m.direct", {
+            "@a:x": ["!1", "!2"],
+            "@c:x": ["!9"],
+            "@b:x": ["!3"],
+        });
     });
 
-    it("believes the client's copy again after the sync has had time to bring the save back", async () => {
-        vi.useFakeTimers();
-        try {
-            let current: Record<string, string[]> = { "@a:x": ["!1"] };
-            const writes: Record<string, string[]>[] = [];
-            const client = {
-                getAccountData: vi.fn(() => ({ getContent: () => current })),
-                setAccountData: vi.fn((_type: string, next: Record<string, string[]>) => {
-                    writes.push(next);
-                    return Promise.resolve({});
-                }),
-            };
+    it("writes nothing when the list cannot be read, rather than replacing it from a guess", async () => {
+        const client = clientWith({ "@a:x": ["!1"] });
+        client.http.authedRequest.mockRejectedValueOnce(new Error("offline"));
 
-            await saveDirectRooms(client as never, [{ userId: "@a:x", roomId: "!2" }]);
-            // Another app removes "!1" long after the save.
-            await vi.advanceTimersByTimeAsync(60_000);
-            current = { "@a:x": ["!2"] };
-            await saveDirectRooms(client as never, [{ userId: "@b:x", roomId: "!3" }]);
+        await expect(saveDirectRooms(client as never, [{ userId: "@b:x", roomId: "!2" }])).rejects.toThrow("offline");
 
-            expect(writes[1]).toEqual({ "@a:x": ["!2"], "@b:x": ["!3"] });
-        } finally {
-            vi.useRealTimers();
-        }
+        expect(client.setAccountData).not.toHaveBeenCalled();
     });
 
     it("lets the next save run after one fails, and tells the one that failed", async () => {
@@ -242,6 +242,20 @@ describe("directInviterOf", () => {
             invite(),
         ];
         expect(directInviterOf(events, "@me:x")).toBe("@a:x");
+    });
+
+    it("is the person I sent the direct invite to, when I made the chat", () => {
+        expect(
+            directInviterOf(
+                [invite({}, "@me:x")].map((e) => ({ ...e, state_key: "@a:x" })),
+                "@me:x"
+            )
+        ).toBe("@a:x");
+    });
+
+    it("is nothing for an invite I sent without the direct flag (a group I made)", () => {
+        const sent = { ...invite({ is_direct: false }, "@me:x"), state_key: "@a:x" };
+        expect(directInviterOf([sent], "@me:x")).toBeUndefined();
     });
 
     it("is nothing for an invite without the direct flag (a group)", () => {

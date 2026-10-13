@@ -584,6 +584,7 @@ describe("MatrixChatConnection", () => {
                 startClient: mockStartClient,
                 createRoom: vi.fn().mockResolvedValue(expected),
                 getRoom: vi.fn(),
+                getAccountData: vi.fn(),
             } as unknown as MatrixClient;
 
             const clientPromise = Promise.resolve(mockMatrixClient);
@@ -884,7 +885,10 @@ describe("MatrixChatConnection", () => {
     describe("addDMRoomInAccountData", () => {
         it("should create and set account data when account data is undefined", async () => {
             const mockStartClient = vi.fn();
-            const mockGetContent = vi.fn().mockReturnValue(null);
+            // The account has no list on the server yet.
+            const mockReadList = vi
+                .fn()
+                .mockRejectedValue(Object.assign(new Error("not found"), { data: { errcode: "M_NOT_FOUND" } }));
             const mockSetAccountData = vi.fn();
             const mockMatrixClient = {
                 isGuest: vi.fn(),
@@ -900,9 +904,8 @@ describe("MatrixChatConnection", () => {
                 createRoom: vi.fn(),
                 getRoom: vi.fn().mockReturnValue(null),
                 joinRoom: vi.fn().mockResolvedValue(""),
-                getAccountData: vi.fn().mockReturnValue({
-                    getContent: mockGetContent,
-                }),
+                getSafeUserId: () => "@me:matrix.test",
+                http: { authedRequest: mockReadList },
                 setAccountData: mockSetAccountData,
             } as unknown as MatrixClient;
 
@@ -916,11 +919,8 @@ describe("MatrixChatConnection", () => {
             const roomId = "roomTest";
             await matrixChatConnection["addDMRoomInAccountData"](userId, roomId);
 
-            //eslint-disable-next-line @typescript-eslint/unbound-method
-            expect(mockMatrixClient.getAccountData).toHaveBeenCalledOnce();
-            //eslint-disable-next-line @typescript-eslint/unbound-method
-            expect(mockMatrixClient.getAccountData).toHaveBeenCalledWith("m.direct");
-            expect(mockGetContent).toHaveBeenCalledOnce();
+            // The list is read from the server, not from the client's copy that lags behind.
+            expect(mockReadList).toHaveBeenCalledOnce();
             //eslint-disable-next-line @typescript-eslint/unbound-method
             expect(mockMatrixClient.setAccountData).toHaveBeenCalledOnce();
 
@@ -935,7 +935,7 @@ describe("MatrixChatConnection", () => {
             const directRoomAccountData: Record<string, string[]> = { [userId]: [roomId] };
 
             const mockStartClient = vi.fn();
-            const mockGetContent = vi.fn().mockReturnValue(directRoomAccountData);
+            const mockReadList = vi.fn().mockResolvedValue(directRoomAccountData);
             const mockSetAccountData = vi.fn();
             const mockMatrixClient = {
                 isGuest: vi.fn(),
@@ -951,9 +951,8 @@ describe("MatrixChatConnection", () => {
                 createRoom: vi.fn(),
                 getRoom: vi.fn().mockReturnValue(null),
                 joinRoom: vi.fn().mockResolvedValue(""),
-                getAccountData: vi.fn().mockReturnValue({
-                    getContent: mockGetContent,
-                }),
+                getSafeUserId: () => "@me:matrix.test",
+                http: { authedRequest: mockReadList },
                 setAccountData: mockSetAccountData,
             } as unknown as MatrixClient;
 
@@ -965,11 +964,8 @@ describe("MatrixChatConnection", () => {
 
             await matrixChatConnection["addDMRoomInAccountData"](userId, roomId2);
 
-            //eslint-disable-next-line @typescript-eslint/unbound-method
-            expect(mockMatrixClient.getAccountData).toHaveBeenCalledOnce();
-            //eslint-disable-next-line @typescript-eslint/unbound-method
-            expect(mockMatrixClient.getAccountData).toHaveBeenCalledWith("m.direct");
-            expect(mockGetContent).toHaveBeenCalledOnce();
+            // The list is read from the server, not from the client's copy that lags behind.
+            expect(mockReadList).toHaveBeenCalledOnce();
             //eslint-disable-next-line @typescript-eslint/unbound-method
             expect(mockMatrixClient.setAccountData).toHaveBeenCalledOnce();
 

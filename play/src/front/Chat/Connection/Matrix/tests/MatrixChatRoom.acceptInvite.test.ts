@@ -62,6 +62,14 @@ describe("MatrixChatRoom.joinRoom (accepting an invitation)", () => {
                 getAccountData: (type: string) =>
                     type === "m.direct" && directMap ? { getContent: () => directMap } : undefined,
                 setAccountData,
+                http: {
+                    authedRequest: () =>
+                        directMap
+                            ? Promise.resolve(directMap)
+                            : Promise.reject(
+                                  Object.assign(new Error("not found"), { data: { errcode: "M_NOT_FOUND" } })
+                              ),
+                },
                 getUserId: () => "@me:matrix.test",
                 getSafeUserId: () => "@me:matrix.test",
                 joinRoom,

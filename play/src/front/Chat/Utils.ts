@@ -14,6 +14,7 @@ import { userIsConnected } from "../Stores/MenuStore";
 import { warningMessageStore } from "../Stores/ErrorStore";
 import { LL } from "../../i18n/i18n-svelte";
 import { openChat } from "./openChat";
+import { ChatsStillLoadingError } from "./Connection/ChatsStillLoadingError";
 import { navChat } from "./Stores/ChatStore";
 import { selectedRoomStore } from "./Stores/SelectRoomStore";
 import RequiresLoginForChatModal from "./Components/RequiresLoginForChatModal.svelte";
@@ -92,6 +93,11 @@ export const openDirectChatRoom = async (chatID: string) => {
         navChat.switchToChat();
         openChat("person");
     } catch (error) {
+        if (error instanceof ChatsStillLoadingError) {
+            // Not a failure: the player just tries again in a moment.
+            warningMessageStore.addWarningMessage(get(LL).chat.chatsStillLoading());
+            return;
+        }
         warningMessageStore.addWarningMessage(get(LL).chat.failedToOpenRoom({ roomId: chatID }));
         console.error(error);
         Sentry.captureException(error);
