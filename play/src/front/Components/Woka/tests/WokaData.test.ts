@@ -51,4 +51,31 @@ describe("fetchWokaData", () => {
         expect(fetchMock).toHaveBeenCalledTimes(2);
         expect(requestedRoom(1)).toBe(OTHER_UNIVERSE);
     });
+
+    // #912: a costume granted while the player stands in the room must show when the picker opens
+    it("asks again when a picker opens, and the join screens then share that newer answer", async () => {
+        mocks.currentMapRoom = { href: DEFAULT_WORLD };
+        fetchMock.mockImplementationOnce(() =>
+            Promise.resolve({ ok: true, json: () => Promise.resolve({ woka: { collections: [] } }) })
+        );
+        const first = await fetchWokaData();
+        expect(first).toEqual({ woka: { collections: [] } });
+
+        const granted = { woka: { collections: [{ name: "Granted", position: 0, textures: [] }] } };
+        fetchMock.mockImplementationOnce(() => Promise.resolve({ ok: true, json: () => Promise.resolve(granted) }));
+        expect(await fetchWokaData({ fresh: true })).toEqual(granted);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+
+        // The name and camera screens keep sharing one request: they get the newer answer, with no third request
+        expect(await fetchWokaData()).toEqual(granted);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("does not keep a failed fresh request, so Retry asks again", async () => {
+        mocks.currentMapRoom = { href: DEFAULT_WORLD };
+        fetchMock.mockImplementationOnce(() => Promise.resolve({ ok: false }));
+        await expect(fetchWokaData({ fresh: true })).rejects.toThrow();
+        await fetchWokaData({ fresh: true });
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
 });

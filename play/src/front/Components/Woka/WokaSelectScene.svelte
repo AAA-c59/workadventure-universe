@@ -46,7 +46,7 @@
         try {
             // What you wore lately is asked each time the picker opens (it changes with every pick); a failure just
             // leaves Recent out
-            const [data, mine] = await Promise.all([fetchWokaData(), fetchWokaMine()]);
+            const [data, mine] = await Promise.all([fetchWokaData({ fresh: true }), fetchWokaMine()]);
             wokaData = data;
             recent = (mine?.recent ?? []).filter((outfit) => outfit.textures.length > 0).slice(0, maxRecent);
             loadSavedTexture();

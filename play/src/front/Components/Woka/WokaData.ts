@@ -16,11 +16,13 @@ let cached: { roomUrl: string; promise: Promise<WokaData> } | undefined;
 
 /**
  * The WOKA catalog of the room the player is in (woka/list). The join screens share one request: the name screen and the camera screen
- * show your WOKA, and the picker lists the catalog. A failed request is not kept, so Retry asks again.
+ * show your WOKA. The pickers ask for a `fresh` list each time they open, so a WOKA granted while you stood in the
+ * room shows without a room change or a reload; the answer then replaces the shared one. A failed request is not
+ * kept, so Retry asks again.
  */
-export function fetchWokaData(): Promise<WokaData> {
+export function fetchWokaData({ fresh = false }: { fresh?: boolean } = {}): Promise<WokaData> {
     const roomUrl = gameManager.currentMapRoom.href;
-    if (cached && cached.roomUrl === roomUrl) {
+    if (!fresh && cached && cached.roomUrl === roomUrl) {
         return cached.promise;
     }
     const promise = fetch(`${ABSOLUTE_PUSHER_URL}woka/list?roomUrl=${encodeURIComponent(roomUrl)}`, {
