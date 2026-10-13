@@ -134,6 +134,16 @@ export function worldKnowsWoka(usersByRoom: UsersByRoom, chatId: string): boolea
     return false;
 }
 
+/** Whether this person is in the world's member list but not in the room right now, so the list is all that says what they look like. */
+export function isAwayMember(usersByRoom: UsersByRoom, chatId: string): boolean {
+    for (const { users } of usersByRoom.values()) {
+        for (const user of users) {
+            if (user.chatId === chatId && user.storedWoka !== undefined && user.spaceUserId === undefined) return true;
+        }
+    }
+    return false;
+}
+
 /** The first of two pictures that has one; the same pair always gives the same store, so a list does not redraw. */
 const pairedPictures = new WeakMap<object, WeakMap<object, PictureStore>>();
 export function firstPicture(first: PictureStore, second: PictureStore): PictureStore {

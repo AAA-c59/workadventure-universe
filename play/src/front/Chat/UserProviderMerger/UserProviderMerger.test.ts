@@ -1,6 +1,6 @@
 import { get, readable, writable } from "svelte/store";
 import { AvailabilityStatus } from "@workadventure/messages";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { UserProviderInterface } from "../UserProvider/UserProviderInterface";
 import type { PartialChatUser } from "../Connection/ChatConnection";
 import { UserProviderMerger } from "./UserProviderMerger";
@@ -231,5 +231,22 @@ describe("UserProviderMerger names in Universe", () => {
         const users = [...get(merger.usersByRoomStore).values()].flatMap((room) => room.users);
         expect(users.find((user) => user.chatId === "@bob:chat")?.gameName).toBeUndefined();
         expect(users.find((user) => user.chatId === "@ada:chat")?.storedWoka).toBe(stored);
+    });
+
+    it("asks the providers that keep a list to read it again, and leaves live ones alone", async () => {
+        const refreshIfStale = vi.fn(() => Promise.resolve());
+        const keeping: UserProviderInterface = {
+            users: writable<PartialChatUser[]>([]),
+            setFilter: () => Promise.resolve(),
+            refreshIfStale,
+        };
+        const live: UserProviderInterface = {
+            users: writable<PartialChatUser[]>([]),
+            setFilter: () => Promise.resolve(),
+        };
+
+        await new UserProviderMerger([live, keeping]).refreshStaleProviders();
+
+        expect(refreshIfStale).toHaveBeenCalledOnce();
     });
 });

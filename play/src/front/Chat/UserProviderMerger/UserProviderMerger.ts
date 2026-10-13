@@ -82,6 +82,13 @@ export class UserProviderMerger {
     setFilter(searchText: string): Promise<void[]> {
         return Promise.all(this.userProviders.map((userProvider) => userProvider.setFilter(searchText)));
     }
+
+    /** Lets the providers that keep a list read it again when it has become old (see `refreshIfStale`). */
+    async refreshStaleProviders(): Promise<void> {
+        await Promise.all(
+            this.userProviders.map((userProvider) => userProvider.refreshIfStale?.() ?? Promise.resolve())
+        );
+    }
 }
 
 /**
