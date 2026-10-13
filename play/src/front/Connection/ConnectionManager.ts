@@ -886,7 +886,7 @@ class ConnectionManager {
     async saveName(name: string): Promise<boolean> {
         if (
             shouldSaveNameOnServer({
-                hasNameCapability: hasCapability("api/save-name"),
+                hasNameCapability: Boolean(hasCapability("api/save-name")),
                 hasAuthToken: this.authToken !== undefined,
                 isSignedIn: localUserStore.isLogged(),
             })
