@@ -8,6 +8,7 @@
     import { worldSlugFromRoomUrl } from "../../Stores/WorldNameStore";
     import { inputFormFocusStore } from "../../Stores/UserInputStore";
     import { LL, locale } from "../../../i18n/i18n-svelte";
+    import { universeLogo } from "../images/universeLogo";
     import { IconBan, IconCheck } from "@wa-icons";
 
     // The room the player was refused (or was in when an admin banned them).
@@ -104,7 +105,7 @@
     transition:fly={{ y: -200, duration: 500 }}
 >
     <div class="m-auto flex w-[min(420px,100%)] flex-col items-center">
-        <p class="ban-wordmark m-0 mb-6">Universe</p>
+        <img class="ban-logo mb-5" src={universeLogo} alt="Universe" width="150" height="75" draggable="false" />
         <div class="u-surface flex w-full flex-col gap-4 rounded-2xl p-5">
             {#if lifted}
                 <div class="flex items-start gap-3">
@@ -215,14 +216,10 @@
     .ban-screen {
         background: radial-gradient(120% 80% at 50% 0%, rgb(31 28 47), rgb(10 8 20));
     }
-    .ban-wordmark {
-        font-size: 22px;
-        font-weight: 700;
-        letter-spacing: -0.01em;
-        background: linear-gradient(135deg, #c4b5fd 0%, #e9c74c 50%, #c4b5fd 100%);
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
+    .ban-logo {
+        display: block;
+        max-width: 100%;
+        height: auto;
     }
     .ban-tile {
         display: inline-flex;
