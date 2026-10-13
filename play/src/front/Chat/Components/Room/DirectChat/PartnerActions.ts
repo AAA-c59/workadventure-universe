@@ -67,20 +67,23 @@ export function reportPartner(partner: DirectPartner, name: string): void {
 
 /**
  * Invite works for anyone with an account the pusher can reach (friends, or members of a world you share, anywhere in
- * Universe), so it only shows while they're online: in Universe or on chat. Never for a bot or someone you blocked.
+ * Universe), so it only shows while they're online: in Universe or on chat. Never for a bot or someone you blocked, in
+ * chat or in the game (the meeting's Moderation menu).
  */
 export function canInvitePartner(partner: DirectPartner, invitesEnabled: boolean): boolean {
     return (
         invitesEnabled &&
         !isBotPartner(partner) &&
         !partner.isBlocked &&
+        !partner.isGameBlocked &&
         partner.uuid !== undefined &&
         partner.place.kind !== "offline"
     );
 }
 
 export function invitePartner(partner: DirectPartner, name: string): void {
-    if (partner.uuid) ringStore.ring(partner.uuid, name).catch((error) => console.error(error));
+    if (!partner.uuid || partner.isGameBlocked || blackListManager.isBlackListed(partner.uuid)) return;
+    ringStore.ring(partner.uuid, name).catch((error) => console.error(error));
 }
 
 /** Add friend, or what comes next with them (cancel, accept, remove), when friends work here and they have an account. */
