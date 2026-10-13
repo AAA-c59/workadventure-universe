@@ -10,7 +10,8 @@ const orbit = vi.hoisted(() => ({
 vi.mock("../../../../../external-modules/admin-api/index", () => orbit);
 vi.mock("../../../../../Phaser/Game/GameManager", () => ({ gameManager: {} }));
 vi.mock("../../../../../Administration/AnalyticsClient", () => ({ analyticsClient: {} }));
-vi.mock("../../../../../WebRtc/BlackListManager", () => ({ blackListManager: {} }));
+const blackList = vi.hoisted(() => ({ isBlackListed: vi.fn(() => false) }));
+vi.mock("../../../../../WebRtc/BlackListManager", () => ({ blackListManager: blackList }));
 vi.mock("../../../../../Stores/ShowReportScreenStore", () => ({ showReportScreenStore: {} }));
 const ring = vi.hoisted(() => ({ ring: vi.fn(() => Promise.resolve(true)) }));
 vi.mock("../../../../Stores/RingStore", () => ({ ringStore: ring }));
@@ -41,6 +42,7 @@ function partner(overrides: Partial<DirectPartner> = {}): DirectPartner {
         actions: { walkTo: false, locate: false },
         isBot: false,
         isBlocked: false,
+        isGameBlocked: false,
         ...overrides,
     };
 }
@@ -102,6 +104,7 @@ describe("a direct chat's Invite, Add friend and Report", () => {
         expect(canInvitePartner(partner({ ...online }), true)).toBe(false);
         expect(canInvitePartner(partner({ ...online, uuid: "uuid-ada" }), false)).toBe(false);
         expect(canInvitePartner(partner({ ...online, uuid: "uuid-ada", isBlocked: true }), true)).toBe(false);
+        expect(canInvitePartner(partner({ ...online, uuid: "uuid-ada", isGameBlocked: true }), true)).toBe(false);
         expect(canInvitePartner(partner({ ...online, uuid: "uuid-bot", isBot: true }), true)).toBe(false);
         expect(canInvitePartner(partner({ ...online, uuid: "uuid-bot", chatId: "@bot_helper:chat" }), true)).toBe(
             false
@@ -113,6 +116,18 @@ describe("a direct chat's Invite, Add friend and Report", () => {
         expect(ring.ring).toHaveBeenCalledWith("uuid-ada", "Ada");
         ring.ring.mockClear();
         invitePartner(partner(), "Ada");
+        expect(ring.ring).not.toHaveBeenCalled();
+    });
+
+    it("does not ring someone blocked in the game from the Moderation menu", () => {
+        ring.ring.mockClear();
+        // The partner followed the block list.
+        invitePartner(partner({ uuid: "uuid-ada", isGameBlocked: true }), "Ada");
+        // The partner has not caught up with a block that was just made.
+        blackList.isBlackListed.mockReturnValueOnce(true);
+        invitePartner(partner({ uuid: "uuid-ada" }), "Ada");
+
+        expect(blackList.isBlackListed).toHaveBeenCalledWith("uuid-ada");
         expect(ring.ring).not.toHaveBeenCalled();
     });
 

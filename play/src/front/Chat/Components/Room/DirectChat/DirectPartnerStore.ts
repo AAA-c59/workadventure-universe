@@ -17,6 +17,7 @@ import { gameSceneStore } from "../../../../Stores/GameSceneStore";
 import { localUserStore } from "../../../../Connection/LocalUserStore";
 import { friendsStore } from "../../../Stores/FriendsStore";
 import type { PartnerPlace } from "./PartnerPlace";
+import { gameBlockedPeople } from "./gameBlockedPeople";
 import { findAccountUuid, findInUniverse, partnerActions, resolvePartnerPlace } from "./PartnerPlace";
 
 type UsersByRoom = Map<string | undefined, { roomName: string | undefined; users: ChatUser[] }>;
@@ -31,7 +32,10 @@ export interface DirectPartner {
     place: PartnerPlace;
     actions: { walkTo: boolean; locate: boolean };
     isBot: boolean;
+    /** Blocked in chat. */
     isBlocked: boolean;
+    /** Blocked in the game, from the meeting's Moderation menu (or by a block in chat). */
+    isGameBlocked: boolean;
 }
 
 const NO_USERS: UsersByRoom = new Map();
@@ -106,24 +110,22 @@ export function directPartnerStore(room: ChatRoomMembershipManagement): Readable
             friendsStore,
             // The current map changes when the scene reloads.
             gameSceneStore,
+            gameBlockedPeople,
         ],
-        ([member, map, chatPresence, { participants: inBubble, kind }, ignored, friends, scene]) => {
+        ([member, map, chatPresence, { participants: inBubble, kind }, ignored, friends, scene, gameBlocked]) => {
             const chatId = member?.id;
             const currentRoomUrl = scene?.roomUrl;
             const found = chatId ? findInUniverse(map, chatId, currentRoomUrl) : undefined;
             const user = found?.user;
+            const uuid =
+                user?.uuid ??
+                (chatId
+                    ? findAccountUuid(map, friends.status === "signedOut" ? [] : friends.list?.friends ?? [], chatId)
+                    : undefined);
             return {
                 chatId,
                 found,
-                uuid:
-                    user?.uuid ??
-                    (chatId
-                        ? findAccountUuid(
-                              map,
-                              friends.status === "signedOut" ? [] : friends.list?.friends ?? [],
-                              chatId
-                          )
-                        : undefined),
+                uuid,
                 chatPresence,
                 sameMap: user?.playUri !== undefined && user.playUri === currentRoomUrl,
                 talkingWithYou:
@@ -131,6 +133,7 @@ export function directPartnerStore(room: ChatRoomMembershipManagement): Readable
                     user?.spaceUserId !== undefined &&
                     inBubble.some((participant) => participant.id === user.spaceUserId),
                 isBlocked: chatId !== undefined && ignored.includes(chatId),
+                isGameBlocked: uuid !== undefined && gameBlocked.has(uuid),
             };
         }
     );
@@ -158,6 +161,7 @@ export function directPartnerStore(room: ChatRoomMembershipManagement): Readable
             actions: partnerActions(place, user?.uuid !== undefined),
             isBot: user?.isBot === true,
             isBlocked: state.isBlocked,
+            isGameBlocked: state.isGameBlocked,
         };
     });
 }
