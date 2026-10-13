@@ -101,6 +101,74 @@ describe("ChatPeople", () => {
     });
 });
 
+describe("ChatPeople refresh", () => {
+    it("asks again for a person whose answer is two minutes old, and shows the new name and picture", async () => {
+        let time = 1_000;
+        const ask = vi
+            .fn<(chatId: string) => Promise<ChatPersonAnswer>>()
+            .mockResolvedValueOnce({ wokaName: "Alice", characterTextures: [] })
+            .mockResolvedValue({ wokaName: "Alice B.", characterTextures: WOKA });
+        const people = new ChatPeople(ask, () => time);
+
+        people.request("@alice:m");
+        await vi.waitFor(() => expect(get(people.store).get("@alice:m")?.name).toBe("Alice"));
+        time += 119_000;
+        people.request("@alice:m");
+        expect(ask).toHaveBeenCalledTimes(1);
+
+        time += 1_000;
+        people.request("@alice:m");
+        await vi.waitFor(() => expect(get(people.store).get("@alice:m")?.name).toBe("Alice B."));
+        expect(ask).toHaveBeenCalledTimes(2);
+        expect(get(people.store).get("@alice:m")?.picture).toBeDefined();
+    });
+
+    it("keeps the old name on screen while the new answer is out, and when it fails", async () => {
+        let time = 1_000;
+        const retries: (() => void)[] = [];
+        const ask = vi
+            .fn<(chatId: string) => Promise<ChatPersonAnswer>>()
+            .mockResolvedValueOnce({ wokaName: "Alice", characterTextures: [] })
+            .mockRejectedValueOnce(new Error("network"));
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+        const people = new ChatPeople(
+            ask,
+            () => time,
+            (retry) => retries.push(retry)
+        );
+
+        people.request("@alice:m");
+        await vi.waitFor(() => expect(get(people.store).get("@alice:m")?.name).toBe("Alice"));
+        time += 120_000;
+        people.request("@alice:m");
+        // The question is out: asking again does nothing
+        people.request("@alice:m");
+        expect(ask).toHaveBeenCalledTimes(2);
+        await vi.waitFor(() => expect(warn).toHaveBeenCalled());
+
+        expect(get(people.store).get("@alice:m")?.name).toBe("Alice");
+        warn.mockRestore();
+    });
+
+    it("keeps to three questions at once when many old answers are refreshed together", async () => {
+        let time = 1_000;
+        const ask = vi.fn((_chatId: string) =>
+            Promise.resolve<ChatPersonAnswer>({ wokaName: "x", characterTextures: [] })
+        );
+        const people = new ChatPeople(ask, () => time);
+        const chatIds = ["@p1:m", "@p2:m", "@p3:m", "@p4:m", "@p5:m"];
+        for (const chatId of chatIds) people.request(chatId);
+        await vi.waitFor(() => expect(get(people.store).size).toBe(5));
+        expect(ask).toHaveBeenCalledTimes(5);
+
+        time += 120_000;
+        for (const chatId of chatIds) people.request(chatId);
+
+        expect(ask).toHaveBeenCalledTimes(8);
+        await vi.waitFor(() => expect(ask).toHaveBeenCalledTimes(10));
+    });
+});
+
 describe("ChatPeople retries", () => {
     it("asks again on its own a minute after a failure, while the chat stays open", async () => {
         let time = 1_000;

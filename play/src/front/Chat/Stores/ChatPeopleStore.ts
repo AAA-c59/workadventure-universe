@@ -17,6 +17,8 @@ export type AskChatPerson = (chatId: string) => Promise<ChatPersonAnswer>;
 
 /** At most this many questions are out at once, so a long chat list never floods the server. */
 const MAX_IN_FLIGHT = 3;
+/** An answer older than this is asked for again the next time the chat shows that person (their Woka or name may have changed). */
+const REFRESH_AFTER_MS = 2 * 60_000;
 /** A question that failed (network, server) is asked again no sooner than this, on its own while the chat stays open. */
 const RETRY_AFTER_MS = 60_000;
 /** A question that keeps failing is asked again on its own at most this many times (a later request still asks). */
@@ -24,14 +26,15 @@ const MAX_AUTO_RETRIES = 3;
 
 type Asked =
     | { status: "pending"; failures: number }
-    | { status: "done" }
+    | { status: "done"; at: number }
     | { status: "failed"; at: number; failures: number };
 type Schedule = (retry: () => void, delayMs: number) => void;
 
 /**
  * People the chat only knows from a direct chat (they are not in your world, so neither the map nor the world's member
- * list says what they look like): asked of Orbit once per chat ID, and kept for as long as this connection lives (a
- * new room is a new connection, and Orbit draws people from the world you are in).
+ * list says what they look like): asked of Orbit per chat ID, and kept for as long as this connection lives (a new room
+ * is a new connection, and Orbit draws people from the world you are in). The chat asks again when it shows someone
+ * whose answer is a couple of minutes old, so a changed Woka or name shows up without a reload.
  */
 export class ChatPeople {
     private readonly people = writable(new Map<string, ChatPerson>());
@@ -50,10 +53,15 @@ export class ChatPeople {
         }
     ) {}
 
-    /** Asks about this person unless they were asked about already (or the question is still out). */
+    /**
+     * Asks about this person unless the question is still out, or the answer is recent. A failed question is asked again
+     * after a while, and an old answer is asked for again (the old name and picture stay until the new answer comes).
+     */
     request(chatId: string): void {
         const asked = this.asked.get(chatId);
-        if (asked && (asked.status !== "failed" || this.now() - asked.at < RETRY_AFTER_MS)) return;
+        if (asked?.status === "pending") return;
+        if (asked?.status === "done" && this.now() - asked.at < REFRESH_AFTER_MS) return;
+        if (asked?.status === "failed" && this.now() - asked.at < RETRY_AFTER_MS) return;
         this.enqueue(chatId, asked?.status === "failed" ? asked.failures : 0);
     }
 
@@ -76,7 +84,7 @@ export class ChatPeople {
             this.inFlight++;
             this.ask(chatId)
                 .then((answer) => {
-                    this.asked.set(chatId, { status: "done" });
+                    this.asked.set(chatId, { status: "done", at: this.now() });
                     const name = answer.wokaName?.trim();
                     const picture = storedWokaStore(answer.characterTextures);
                     if (!name && !picture) return;
