@@ -1151,8 +1151,8 @@ export class MatrixChatConnection implements ChatConnectionInterface {
 
     /** Whether the room has that person in it, or does not say yet who the other person is. */
     private couldBeChatWith(roomId: string, userId: string): boolean {
-        const room = this.roomList.get(roomId);
-        // A room that left the list is no chat to open.
+        const room = this.allRooms().find((candidate) => candidate.id === roomId);
+        // A room that left the lists is no chat to open.
         if (!room) return false;
         const myUserId = this.client?.getUserId();
         const others = get(room.members).filter((member) => member.id !== myUserId);
@@ -1219,6 +1219,21 @@ export class MatrixChatConnection implements ChatConnectionInterface {
     }
 
     /**
+     * Every room of the account: the top list and the rooms inside every folder, folders in folders too. A chat put in a
+     * folder is kept in that folder's list only, so a lookup of the top list alone would not find it.
+     */
+    private allRooms(): MatrixChatRoom[] {
+        // A room can be in the top list and in its folder's list while the folder is not joined: counted once.
+        const rooms = new Map<string, MatrixChatRoom>(this.roomList);
+        const addFolder = (folder: MatrixRoomFolder) => {
+            for (const [id, room] of folder.roomList) if (!rooms.has(id)) rooms.set(id, room);
+            for (const subFolder of folder.folderList.values()) addFolder(subFolder);
+        };
+        for (const folder of this.roomFolders.values()) addFolder(folder);
+        return Array.from(rooms.values());
+    }
+
+    /**
      * Rooms that still carry the direct flag of the invite I accepted, but that the account's list does not hold,
      * are added to it. Accepting an invite did not save it before, so those chats turn into groups when the flag is lost.
      */
@@ -1228,7 +1243,7 @@ export class MatrixChatConnection implements ChatConnectionInterface {
         const directMap = this.directMap();
         const missing: { userId: string; roomId: string }[] = [];
         const toCheck: string[] = [];
-        for (const room of this.roomList.values()) {
+        for (const room of this.allRooms()) {
             if (get(room.myMembership) !== KnownMembership.Join) continue;
             const inviter = client.getRoom(room.id)?.getDMInviter();
             if (inviter && inviter !== client.getUserId()) {
@@ -1296,7 +1311,7 @@ export class MatrixChatConnection implements ChatConnectionInterface {
         // You are a member of every direct room you have, so your own id would match the first one found.
         if (userID === this.client?.getUserId()) return undefined;
         const directMap = this.directMap();
-        const candidates = Array.from(this.roomList.values()).map((room): DirectRoomCandidate<MatrixChatRoom> => {
+        const candidates = this.allRooms().map((room): DirectRoomCandidate<MatrixChatRoom> => {
             const members = get(room.members);
             const partnerMembership = members.find((member) => member.id === userID)?.membership;
             const sdkRoom = this.client?.getRoom(room.id);

@@ -3,6 +3,8 @@ import { EventType } from "matrix-js-sdk";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Readable } from "svelte/store";
 import { readable, writable } from "svelte/store";
+import { MapStore } from "@workadventure/store-utils";
+import type { MatrixRoomFolder } from "../MatrixRoomFolder";
 import type { MatrixChatRoom } from "../MatrixChatRoom";
 import type { MatrixSecurity } from "../MatrixSecurity";
 import { MatrixChatConnection } from "../MatrixChatConnection";
@@ -35,6 +37,13 @@ interface FakeRoomOptions {
     named?: boolean;
     /** The person whose invite carried the direct flag. */
     dmInviter?: string;
+    /** The room sits in the list of this folder (see `addFolder`), and not in the top list. */
+    folder?: string;
+}
+
+interface FakeFolder {
+    roomList: MapStore<string, MatrixChatRoom>;
+    folderList: MapStore<string, FakeFolder>;
 }
 
 describe("MatrixChatConnection: the chat with one person", () => {
@@ -50,6 +59,18 @@ describe("MatrixChatConnection: the chat with one person", () => {
     let sdkRooms: Map<string, unknown>;
     let connection: MatrixChatConnection;
     let rooms: Map<string, { id: string; membership: Record<string, ReturnType<typeof writable<string>>> }>;
+
+    let folders: Map<string, FakeFolder>;
+
+    /** Puts a folder (a space) in the top list of folders, or in another folder when given its id. */
+    function addFolder(id: string, parent?: string): FakeFolder {
+        const folder: FakeFolder = { roomList: new MapStore(), folderList: new MapStore() };
+        folders.set(id, folder);
+        const parentFolder = parent ? folders.get(parent) : undefined;
+        if (parentFolder) parentFolder.folderList.set(id, folder);
+        else connection["roomFolders"].set(id, folder as unknown as MatrixRoomFolder);
+        return folder;
+    }
 
     /** Puts a chat in the room list as the connection would hold it. */
     function addRoom(id: string, options: FakeRoomOptions = {}): MatrixChatRoom {
@@ -77,7 +98,9 @@ describe("MatrixChatConnection: the chat with one person", () => {
                 getStateEvents: () => (options.named ? { getContent: () => ({ name: "Project room" }) } : null),
             },
         });
-        connection["roomList"].set(id, room);
+        const folder = options.folder ? folders.get(options.folder) : undefined;
+        if (folder) folder.roomList.set(id, room);
+        else connection["roomList"].set(id, room);
         rooms.set(id, { id, membership: memberships });
         return room;
     }
@@ -95,6 +118,7 @@ describe("MatrixChatConnection: the chat with one person", () => {
         directMap = undefined;
         sdkRooms = new Map();
         rooms = new Map();
+        folders = new Map();
         const client = {
             isGuest: vi.fn(),
             on: vi.fn(),
@@ -191,6 +215,73 @@ describe("MatrixChatConnection: the chat with one person", () => {
             addRoom("!chat");
 
             expect(connection.getDirectRoomFor(ME)).toBeUndefined();
+        });
+    });
+
+    describe("a chat inside a folder", () => {
+        it("finds a direct chat that sits in a folder", () => {
+            addFolder("!folder");
+            const room = addRoom("!chat", { folder: "!folder" });
+            directMap = { [ALICE]: ["!chat"] };
+
+            expect(connection.getDirectRoomFor(ALICE)).toBe(room);
+        });
+
+        it("finds a direct chat that sits in a folder inside a folder", () => {
+            addFolder("!outer");
+            addFolder("!inner", "!outer");
+            const room = addRoom("!chat", { folder: "!inner" });
+            directMap = { [ALICE]: ["!chat"] };
+
+            expect(connection.getDirectRoomFor(ALICE)).toBe(room);
+        });
+
+        it("opens that chat on every press of Message and makes no room", async () => {
+            addFolder("!outer");
+            addFolder("!inner", "!outer");
+            const room = addRoom("!chat", { folder: "!inner" });
+            directMap = { [ALICE]: ["!chat"] };
+
+            await expect(connection.createDirectRoom(ALICE)).resolves.toBe(room);
+            await expect(connection.createDirectRoom(ALICE)).resolves.toBe(room);
+
+            expect(createRoom).not.toHaveBeenCalled();
+        });
+
+        it("keeps a group of the same two people in a folder separate from the chat", () => {
+            addFolder("!folder");
+            addRoom("!group", { type: "multiple", named: true, folder: "!folder" });
+            const chat = addRoom("!chat", { folder: "!folder" });
+            directMap = { [ALICE]: ["!chat"] };
+
+            expect(connection.getDirectRoomFor(ALICE)).toBe(chat);
+            expect(connection.getDirectRoomFor(ALICE)?.id).not.toBe("!group");
+        });
+
+        it("does not take a group in a folder for the chat", () => {
+            addFolder("!folder");
+            addRoom("!group", { type: "multiple", named: true, folder: "!folder" });
+
+            expect(connection.getDirectRoomFor(ALICE)).toBeUndefined();
+        });
+
+        it("counts a room that is in the top list and in its folder once", () => {
+            addFolder("!folder");
+            const room = addRoom("!chat");
+            connection["roomFolders"].get("!folder")?.roomList.set("!chat", room);
+            directMap = { [ALICE]: ["!chat"] };
+
+            expect(connection["allRooms"]()).toHaveLength(1);
+            expect(connection.getDirectRoomFor(ALICE)).toBe(room);
+        });
+
+        it("repairs the direct list for a chat in a folder", async () => {
+            addFolder("!folder");
+            addRoom("!chat", { type: "multiple", dmInviter: ALICE, folder: "!folder" });
+
+            connection["repairDirectAccountData"]();
+
+            await vi.waitFor(() => expect(directMap).toEqual({ [ALICE]: ["!chat"] }));
         });
     });
 
