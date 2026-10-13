@@ -17,6 +17,7 @@ vi.mock("../../../Stores/ExploreStore", async () => {
     return { exploreStore: readable({ status: "loading" }) };
 });
 
+import { universeLogo } from "../../images/universeLogo";
 import { loadLocale } from "../../../../i18n/i18n-util.sync";
 import { setLocale } from "../../../../i18n/i18n-svelte";
 import BanScreen from "../BanScreen.svelte";
@@ -60,6 +61,19 @@ describe("BanScreen", () => {
 
     const text = () => target.textContent?.replace(/\s+/g, " ").trim() ?? "";
     const appealBox = () => target.querySelector<HTMLTextAreaElement>("[data-testid=banAppealText]");
+
+    it("shows Universe's logo above the card, not the word", async () => {
+        fetchMock.mockResolvedValueOnce(
+            answer(200, { banned: true, worldName: "Office", expiresAt: null, appeal: null })
+        );
+        component = new BanScreen({ target });
+        await settle();
+
+        const logo = target.querySelector<HTMLImageElement>("img.ban-logo");
+        expect(logo?.getAttribute("src")).toBe(universeLogo);
+        expect(logo?.alt).toBe("Universe");
+        expect(text().startsWith("Universe")).toBe(false);
+    });
 
     it("says what the admin said: world, end date, days left, reason, and offers one appeal", async () => {
         const noonInSixDays = new Date();
