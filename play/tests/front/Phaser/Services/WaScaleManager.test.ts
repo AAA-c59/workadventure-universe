@@ -218,6 +218,23 @@ describe("WaScaleManager camera continuity during resize", () => {
         expect(camera.setZoom).not.toHaveBeenCalled();
     });
 
+    it("re-fits the next scene's camera on resize once that scene hands it over", () => {
+        const { manager, camera, scene } = makeManager();
+        manager.setZoomModifier(0.4, asCamera(camera));
+        // The player leaves through an exit: the old scene's camera goes, the new scene brings a camera at zoom 1.
+        const nextCamera = makeCamera();
+        scene.cameras.main = nextCamera;
+        scene.cameras.cameras = [nextCamera];
+        nextCamera.scene = scene as unknown as Phaser.Scene;
+        manager.applyNewSize(asCamera(nextCamera));
+        expect(nextCamera.zoom).toBeCloseTo(0.6);
+
+        viewport.width = 2560;
+        viewport.height = 1440;
+        manager.applyNewSize();
+        expect(nextCamera.zoom).toBe(1);
+    });
+
     it("restores both the saved zoom modifier and its camera component", () => {
         const { manager, camera } = makeManager();
         manager.setZoomModifier(0.4, asCamera(camera));

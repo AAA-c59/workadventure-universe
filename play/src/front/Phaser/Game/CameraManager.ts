@@ -165,6 +165,10 @@ export class CameraManager extends Phaser.Events.EventEmitter {
         );
         this.waScaleManager.maxZoomOut = targetZoomModifier;
         this.targetZoomModifier = undefined;
+
+        // A new scene's camera starts at zoom 1. Hand it to the scale manager so a zoom kept from the previous map
+        // applies now, and later resizes keep re-fitting this camera.
+        this.waScaleManager.applyNewSize(this.camera);
     }
 
     public destroy(): void {
