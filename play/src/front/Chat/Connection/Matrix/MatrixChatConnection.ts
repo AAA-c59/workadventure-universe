@@ -61,6 +61,7 @@ import { clearMatrixMedia } from "./MatrixMedia";
 import { chatUserFactory, mapMatrixPresenceToAvailabilityStatus, toChatPresence } from "./MatrixChatUser";
 import { WokaAvatarSaver, wokaIdentity } from "./MatrixWokaAvatar";
 import type { DirectMap, DirectRoomCandidate } from "./directRooms";
+import { forgetRememberedRooms } from "./roomsToForget";
 import { directInviterOf, holdsTheRoom, isListedAsDirect, pickChatWithPerson, saveDirectRooms } from "./directRooms";
 
 const CLIENT_NOT_INITIALIZED_ERROR_MSG = "MatrixClient not yet initialized";
@@ -264,6 +265,16 @@ export class MatrixChatConnection implements ChatConnectionInterface {
         });
     }
 
+    /** Forgets the chats this account deleted but could not forget at the time (see `roomsToForget`). */
+    private forgetLeftRooms(): void {
+        const client = this.client;
+        const userId = client?.getUserId();
+        if (!client || !userId) return;
+        forgetRememberedRooms(client, userId).catch((error: unknown) => {
+            console.warn("Could not forget the rooms that were left", error);
+        });
+    }
+
     private onUserPresenceEvent(event: MatrixEvent | undefined, user: User): void {
         const userStatus = get(this.usersStatus).get(user.userId);
         const newStatus = mapMatrixPresenceToAvailabilityStatus(user.presence);
@@ -283,6 +294,7 @@ export class MatrixChatConnection implements ChatConnectionInterface {
                     this._ignoredUsers.set(this.client.getIgnoredUsers());
                     this.startSavingWokaAsAvatar();
                     this.repairDirectAccountData();
+                    this.forgetLeftRooms();
                     break;
                 case SyncState.Error:
                     this.connectionStatus.set("ON_ERROR");
@@ -301,6 +313,8 @@ export class MatrixChatConnection implements ChatConnectionInterface {
                     if (get(this.connectionStatus) !== "ONLINE" && this.isClientReady) {
                         this.connectionStatus.set("ONLINE");
                     }
+                    // The connection is back: chats that were left but not forgotten while it was down are forgotten now.
+                    if (prevState === SyncState.Error || prevState === SyncState.Reconnecting) this.forgetLeftRooms();
                     break;
             }
         });

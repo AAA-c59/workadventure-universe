@@ -60,6 +60,7 @@ describe("MatrixChatRoom.leaveRoom", () => {
             myUserId: "@me:matrix.test",
             client: {
                 getAccountData: () => undefined,
+                getRoom: () => null,
                 getUserId: () => "@me:matrix.test",
                 getSafeUserId: () => "@me:matrix.test",
                 leave,
@@ -110,12 +111,25 @@ describe("MatrixChatRoom.leaveRoom", () => {
         expect(calls).toEqual(["leave"]);
     });
 
-    it("still counts as deleted when forgetting fails, the leave is not undone", async () => {
-        forget.mockImplementation(() => Promise.reject(new Error("offline")));
+    it("still counts as deleted when forgetting fails, the leave is not undone, and forgets again later", async () => {
+        vi.useFakeTimers();
+        try {
+            localStorage.clear();
+            forget.mockImplementationOnce(() => Promise.reject(new Error("offline")));
 
-        await expect(build().leaveRoom({ forget: true })).resolves.toBeUndefined();
+            await expect(build().leaveRoom({ forget: true })).resolves.toBeUndefined();
 
-        expect(leave).toHaveBeenCalledOnce();
+            expect(leave).toHaveBeenCalledOnce();
+            expect(forget).toHaveBeenCalledTimes(1);
+            // The server answers this time: the room is forgotten without anyone pressing anything.
+            await vi.advanceTimersByTimeAsync(10_000);
+            expect(forget).toHaveBeenCalledTimes(2);
+            expect(forget).toHaveBeenLastCalledWith("!dm:matrix.test");
+            await vi.advanceTimersByTimeAsync(60_000);
+            expect(forget).toHaveBeenCalledTimes(2);
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it("fails and does not forget when the leave fails", async () => {

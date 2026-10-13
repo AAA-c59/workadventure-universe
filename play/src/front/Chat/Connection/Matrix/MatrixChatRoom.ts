@@ -54,9 +54,12 @@ import { isInvitationGoneError } from "./isInvitationGoneError";
 import { changingMatrixAvatarStore } from "./MatrixMedia";
 import { lastMessageTimestamp } from "./lastMessageTimestamp";
 import { saveDirectRooms } from "./directRooms";
+import { forgetRememberedRooms, rememberRoomToForget } from "./roomsToForget";
 
 /** How long leaving waits for pending invitations to be withdrawn before it leaves anyway. */
 const INVITE_WITHDRAWAL_DEADLINE_MS = 3000;
+/** A room that was left but could not be forgotten is tried again after this long (and at every start and reconnect). */
+const FORGET_RETRY_DELAY_MS = 10_000;
 
 /** Events asked from the server per request while loading earlier messages. */
 const PREVIOUS_EVENTS_PAGE_SIZE = 30;
@@ -650,9 +653,18 @@ export class MatrixChatRoom
         }
         if (!options.forget) return;
         // Left already: forgetting is what removes the room from every app for good. A failure here must not undo the
-        // leave, so the chat is still deleted for this person and the room is left to be forgotten later.
-        await this.matrixRoom.client.forget(this.id).catch((error: unknown) => {
-            console.warn("Left the room but could not forget it", error);
+        // leave, so the chat is still deleted for this person; the room is written down and forgotten again soon, and
+        // at the next start, so it does not stay in Element as an empty room.
+        const client = this.matrixRoom.client;
+        await client.forget(this.id).catch((error: unknown) => {
+            console.warn("Left the room but could not forget it, trying again later", error);
+            const userId = client.getSafeUserId();
+            rememberRoomToForget(userId, this.id);
+            setTimeout(() => {
+                forgetRememberedRooms(client, userId).catch((retryError: unknown) =>
+                    console.warn("Could not forget the rooms that were left", retryError)
+                );
+            }, FORGET_RETRY_DELAY_MS);
         });
     }
 
