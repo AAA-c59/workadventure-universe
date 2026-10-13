@@ -944,6 +944,99 @@ describe("MatrixChatConnection: the chat with one person", () => {
                     }
                 });
             });
+
+            describe("when reading a first invite fails", () => {
+                const BOB = "@bob:matrix.test";
+
+                /** The history of that room fails (the server is having trouble) until `recover` is called. */
+                function readFails(roomId: string): { recover: () => void } {
+                    let failing = true;
+                    createMessagesRequest.mockImplementation((id: string) =>
+                        failing && id === roomId
+                            ? Promise.reject(new Error("503 Service Unavailable"))
+                            : Promise.resolve({ chunk: firstEvents[id] ?? [] })
+                    );
+                    return {
+                        recover: () => {
+                            failing = false;
+                        },
+                    };
+                }
+
+                it("tells the player the chats are still loading, makes no room, and opens the same chat once the read works", async () => {
+                    // N01 of the v0.3.5 re-audit: the read failed, so the room was taken for no chat and a second one was made.
+                    const room = addRoom("!r1", { type: "multiple" });
+                    firstEvents["!r1"] = [directInvite(ALICE)];
+                    const server = readFails("!r1");
+
+                    await expect(connection.createDirectRoom(ALICE)).rejects.toBeInstanceOf(ChatsStillLoadingError);
+                    expect(createRoom).not.toHaveBeenCalled();
+
+                    // Still failing: still no room.
+                    await expect(connection.createDirectRoom(ALICE)).rejects.toBeInstanceOf(ChatsStillLoadingError);
+                    expect(createRoom).not.toHaveBeenCalled();
+
+                    server.recover();
+                    await expect(connection.createDirectRoom(ALICE)).resolves.toBe(room);
+                    expect(createRoom).not.toHaveBeenCalled();
+                    expect(createMessagesRequest).toHaveBeenCalledTimes(3);
+                });
+
+                it("does the same for a chat inside a folder", async () => {
+                    addFolder("!space");
+                    const room = addRoom("!r1", { type: "multiple", folder: "!space" });
+                    firstEvents["!r1"] = [directInvite(ALICE)];
+                    const server = readFails("!r1");
+
+                    await expect(connection.createDirectRoom(ALICE)).rejects.toBeInstanceOf(ChatsStillLoadingError);
+                    expect(createRoom).not.toHaveBeenCalled();
+
+                    server.recover();
+                    await expect(connection.createDirectRoom(ALICE)).resolves.toBe(room);
+                    expect(createRoom).not.toHaveBeenCalled();
+                });
+
+                it("still makes a chat with someone else when an unrelated room cannot be read", async () => {
+                    addRoom("!r1", { type: "multiple" });
+                    firstEvents["!r1"] = [directInvite(ALICE)];
+                    readFails("!r1");
+                    vi.spyOn(
+                        connection as unknown as { waitForNextSync: () => Promise<void> },
+                        "waitForNextSync"
+                    ).mockResolvedValue();
+                    vi.spyOn(
+                        connection as unknown as { createAndAddNewRootRoom: (room: unknown) => unknown },
+                        "createAndAddNewRootRoom"
+                    ).mockReturnValue("a chat");
+                    sdkRooms.set("!new:matrix.test", { roomId: "!new:matrix.test" });
+
+                    await expect(connection.createDirectRoom(BOB)).resolves.toBe("a chat");
+                    expect(createRoom).toHaveBeenCalledOnce();
+                });
+
+                it("makes a new chat once the read works and the room turns out to be a group, not a chat", async () => {
+                    // Two of us in a room that was never a direct chat: a group of two stays a group.
+                    addRoom("!group", { type: "multiple" });
+                    firstEvents["!group"] = [];
+                    const server = readFails("!group");
+                    vi.spyOn(
+                        connection as unknown as { waitForNextSync: () => Promise<void> },
+                        "waitForNextSync"
+                    ).mockResolvedValue();
+                    vi.spyOn(
+                        connection as unknown as { createAndAddNewRootRoom: (room: unknown) => unknown },
+                        "createAndAddNewRootRoom"
+                    ).mockReturnValue("a chat");
+                    sdkRooms.set("!new:matrix.test", { roomId: "!new:matrix.test" });
+
+                    await expect(connection.createDirectRoom(ALICE)).rejects.toBeInstanceOf(ChatsStillLoadingError);
+                    expect(createRoom).not.toHaveBeenCalled();
+
+                    server.recover();
+                    await expect(connection.createDirectRoom(ALICE)).resolves.toBe("a chat");
+                    expect(createRoom).toHaveBeenCalledOnce();
+                });
+            });
         });
     });
 });

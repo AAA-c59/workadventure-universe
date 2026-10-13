@@ -3,6 +3,7 @@ import type { MatrixClient } from "matrix-js-sdk";
 import {
     FORGET_RETRY_DELAYS_MS,
     forgetRememberedRooms,
+    forgetRememberedRoomsAndRetry,
     rememberRoomToForget,
     retryForgettingRememberedRooms,
 } from "../roomsToForget";
@@ -205,6 +206,47 @@ describe("rooms that were left but could not be forgotten", () => {
             await vi.advanceTimersByTimeAsync(600_000);
 
             expect(forget).toHaveBeenCalledOnce();
+        });
+
+        it("after a reload during an outage, keeps trying once the start's own try failed, until the room is forgotten", async () => {
+            // N02 of the v0.3.5 re-audit: the start tried once, failed, and nothing tried again while the tab stayed open.
+            vi.useFakeTimers();
+            rememberRoomToForget(me, "!a:matrix.test"); // written down before the reload
+            let serverDown = true;
+            const { client, forget } = fakeClient({
+                forget: () => (serverDown ? Promise.reject(new Error("offline")) : Promise.resolve({})),
+            });
+
+            await forgetRememberedRoomsAndRetry(client, me);
+            expect(forget).toHaveBeenCalledTimes(1);
+            expect(localStorage.length).toBe(1);
+
+            // Only the server comes back: no reload, reconnect or new delete.
+            serverDown = false;
+            await vi.advanceTimersByTimeAsync(10_000);
+            expect(forget).toHaveBeenCalledTimes(2);
+            expect(localStorage.length).toBe(0);
+
+            await vi.advanceTimersByTimeAsync(3_600_000);
+            expect(forget).toHaveBeenCalledTimes(2);
+        });
+
+        it("starts no chain of tries at start when everything written down was forgotten", async () => {
+            vi.useFakeTimers();
+            rememberRoomToForget(me, "!a:matrix.test");
+            const { client, forget } = fakeClient();
+
+            await forgetRememberedRoomsAndRetry(client, me);
+            expect(forget).toHaveBeenCalledOnce();
+
+            // A room written down later without its own chain: no chain from the start picks it up.
+            localStorage.setItem(
+                "universe:matrix:rooms-to-forget:" + me,
+                JSON.stringify([{ roomId: "!b", attempts: 1 }])
+            );
+            await vi.advanceTimersByTimeAsync(3_600_000);
+            expect(forget).toHaveBeenCalledOnce();
+            localStorage.clear();
         });
 
         it("lets a room go after its fifth try in all, and the chain ends with it", async () => {
