@@ -80,6 +80,30 @@ type DirectAccountDataClient = Pick<MatrixClient, "getAccountData" | "setAccount
 const pendingSaves = new WeakMap<DirectAccountDataClient, Promise<unknown>>();
 
 /**
+ * What the last save wrote, until the client's own copy shows it. The client updates its copy of the account data when
+ * the next sync brings it back, not when the save returns, so a save right after another would not see the first.
+ */
+const lastWritten = new WeakMap<DirectAccountDataClient, { map: DirectMap; at: number }>();
+/** The sync that brings a save back comes within seconds; after this long the client's own copy is believed again. */
+const ECHO_WAIT_MS = 30_000;
+
+function includesAll(map: DirectMap | undefined, wanted: DirectMap): boolean {
+    return Object.entries(wanted).every(([userId, roomIds]) =>
+        (roomIds ?? []).every((roomId) => isListedAsDirect(map, userId, roomId))
+    );
+}
+
+/** Both lists in one: every room either one has, under the person it has it under. */
+function unionOf(a: DirectMap | undefined, b: DirectMap | undefined): DirectMap | undefined {
+    if (!a || !b) return a ?? b;
+    const merged: DirectMap = { ...a };
+    for (const [userId, roomIds] of Object.entries(b)) {
+        merged[userId] = Array.from(new Set([...(merged[userId] ?? []), ...(roomIds ?? [])]));
+    }
+    return merged;
+}
+
+/**
  * Lists the rooms under their person in the account's `m.direct`, in one save, and only the ones that are not there yet.
  * Other apps and the other chats of the account read this list to know which rooms are direct chats.
  */
@@ -88,7 +112,14 @@ export function saveDirectRooms(
     rooms: { userId: string; roomId: string }[]
 ): Promise<void> {
     const save = async (): Promise<void> => {
-        let directMap = client.getAccountData("m.direct")?.getContent<DirectMap>() ?? undefined;
+        const known = client.getAccountData("m.direct")?.getContent<DirectMap>() ?? undefined;
+        const written = lastWritten.get(client);
+        // Once the client shows what was written, or has had time to, its own copy is the truth again (others may
+        // have changed it since).
+        if (written && (includesAll(known, written.map) || Date.now() - written.at > ECHO_WAIT_MS)) {
+            lastWritten.delete(client);
+        }
+        let directMap = lastWritten.has(client) ? unionOf(known, written?.map) : known;
         let changed = false;
         for (const { userId, roomId } of rooms) {
             const next = withDirectRoom(directMap, userId, roomId);
@@ -96,7 +127,9 @@ export function saveDirectRooms(
             directMap = next;
             changed = true;
         }
-        if (changed) await client.setAccountData("m.direct", directMap as DirectMap);
+        if (!changed) return;
+        await client.setAccountData("m.direct", directMap as DirectMap);
+        lastWritten.set(client, { map: directMap as DirectMap, at: Date.now() });
     };
     const run = (pendingSaves.get(client) ?? Promise.resolve()).then(save, save);
     pendingSaves.set(

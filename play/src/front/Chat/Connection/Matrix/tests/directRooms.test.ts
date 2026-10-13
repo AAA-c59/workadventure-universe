@@ -168,6 +168,49 @@ describe("saveDirectRooms", () => {
         expect(client.setAccountData).toHaveBeenLastCalledWith("m.direct", { "@a:x": ["!1"], "@b:x": ["!2"] });
     });
 
+    it("does not lose a room when the client has not yet got the first save back from the server", async () => {
+        // The client's copy of the account data only changes when the next sync brings it, not when a save returns.
+        const stale: Record<string, string[]> = { "@a:x": ["!1"] };
+        const writes: Record<string, string[]>[] = [];
+        const client = {
+            getAccountData: vi.fn(() => ({ getContent: () => stale })),
+            setAccountData: vi.fn((_type: string, next: Record<string, string[]>) => {
+                writes.push(next);
+                return Promise.resolve({});
+            }),
+        };
+
+        await saveDirectRooms(client as never, [{ userId: "@a:x", roomId: "!2" }]);
+        await saveDirectRooms(client as never, [{ userId: "@b:x", roomId: "!3" }]);
+
+        expect(writes[1]).toEqual({ "@a:x": ["!1", "!2"], "@b:x": ["!3"] });
+    });
+
+    it("believes the client's copy again after the sync has had time to bring the save back", async () => {
+        vi.useFakeTimers();
+        try {
+            let current: Record<string, string[]> = { "@a:x": ["!1"] };
+            const writes: Record<string, string[]>[] = [];
+            const client = {
+                getAccountData: vi.fn(() => ({ getContent: () => current })),
+                setAccountData: vi.fn((_type: string, next: Record<string, string[]>) => {
+                    writes.push(next);
+                    return Promise.resolve({});
+                }),
+            };
+
+            await saveDirectRooms(client as never, [{ userId: "@a:x", roomId: "!2" }]);
+            // Another app removes "!1" long after the save.
+            await vi.advanceTimersByTimeAsync(60_000);
+            current = { "@a:x": ["!2"] };
+            await saveDirectRooms(client as never, [{ userId: "@b:x", roomId: "!3" }]);
+
+            expect(writes[1]).toEqual({ "@a:x": ["!2"], "@b:x": ["!3"] });
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     it("lets the next save run after one fails, and tells the one that failed", async () => {
         const client = clientWith({});
         client.setAccountData.mockRejectedValueOnce(new Error("offline"));
