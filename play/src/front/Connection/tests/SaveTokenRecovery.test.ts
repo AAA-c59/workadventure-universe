@@ -28,9 +28,9 @@ vi.mock("../../WebRtc/HtmlUtils", () => ({ HtmlUtils: {} }));
 import { connectionManager } from "../ConnectionManager";
 import { localUserStore } from "../LocalUserStore";
 
-/** A game token as the store reads it: three parts, the middle one a JSON payload. */
+/** A signed-in player's game token as the store reads it: three parts, the middle one a JSON payload. */
 function gameToken(label: string): string {
-    return `header.${window.btoa(JSON.stringify({ label }))}.signature`;
+    return `header.${window.btoa(JSON.stringify({ label, accessToken: "access" }))}.signature`;
 }
 
 const OLD_TOKEN = gameToken("old");
