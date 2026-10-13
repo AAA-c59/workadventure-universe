@@ -47,6 +47,3 @@ export const MAX_FONT_SIZE_ON_SCREEN = 13;
 
 /** Names longer than this show their first MAX_NAME_LENGTH - 1 letters and "…", until hovered. */
 export const MAX_NAME_LENGTH = 16;
-
-/** The lighter pill grows a little when hovered. */
-export const HIGHLIGHT_SCALE = 1.06;

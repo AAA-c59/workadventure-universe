@@ -2,7 +2,6 @@ import type { AvailabilityStatus } from "@workadventure/messages";
 import type { UsernameDomLayerClient, UsernameDomLayerHost } from "../Game/UsernameDomLayer";
 import { getDisplayScale, getShownName } from "./UsernameDisplayMetrics";
 import {
-    HIGHLIGHT_SCALE,
     PLAYER_NAME_FONT_SIZE,
     PLAYER_NAME_GAP,
     PLAYER_NAME_HEIGHT,
@@ -25,7 +24,7 @@ const BUBBLE_GAP_EXTRA = PLAYER_NAME_FONT_SIZE * 0.3;
  * a megaphone. It lives in the scene's UsernameDomLayer, in game pixels, and sizes itself so the name stays readable:
  * it stops shrinking when zoomed far out and stops growing past 13 px on screen when zoomed in.
  *
- * - Highlighted (the pointer is over the player, or the player walked up to them): lighter pill, a little larger,
+ * - Highlighted (the pointer is over the player, or the player walked up to them): lighter pill,
  *   in front of the other names, and the full name.
  * - Talking: a white bubble with three waving dots sits just above the pill.
  */
@@ -98,7 +97,7 @@ export class UsernameDisplay implements UsernameDomLayerClient {
     }
 
     /**
-     * The lighter pill, a little larger, in front of the other names, with the full name.
+     * The lighter pill, in front of the other names, with the full name.
      */
     public setHighlighted(highlighted: boolean): void {
         if (this.highlighted === highlighted) {
@@ -197,7 +196,7 @@ export class UsernameDisplay implements UsernameDomLayerClient {
         if (this.destroyed) {
             return;
         }
-        const scale = this.getTransformScale() * (this.highlighted ? HIGHLIGHT_SCALE : 1);
+        const scale = this.getTransformScale();
         // The pill's bottom sits on the given y.
         const y = this.y - (PLAYER_NAME_HEIGHT / 2) * this.displayScale;
         this.element.style.transform = `translate3d(${this.x}px, ${y}px, 0) translate(-50%, -50%) scale(${scale})`;
