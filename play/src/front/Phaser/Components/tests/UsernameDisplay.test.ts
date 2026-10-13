@@ -133,14 +133,17 @@ describe("UsernameDisplay", () => {
         long.destroy();
     });
 
-    it("highlights: lighter pill, in front of the others, a little larger", () => {
+    it("highlights: lighter pill, in front of the others, same size", () => {
         display.setPlayerDepth(300);
+        display.applyTransform();
+        const restingTransform = pill().style.transform;
+        expect(restingTransform).toMatch(/scale\(0\.8\)/);
         expect(pill().style.zIndex).toBe("300");
         display.setHighlighted(true);
         expect(pill().classList.contains("is-highlighted")).toBe(true);
         expect(Number(pill().style.zIndex)).toBeGreaterThan(1_000_000_000);
         display.applyTransform();
-        expect(pill().style.transform).toMatch(/scale\(0\.848/);
+        expect(pill().style.transform).toBe(restingTransform);
         display.setHighlighted(false);
         expect(pill().classList.contains("is-highlighted")).toBe(false);
         expect(pill().style.zIndex).toBe("300");
