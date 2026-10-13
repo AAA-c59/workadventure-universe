@@ -2,7 +2,7 @@ import { get, readable } from "svelte/store";
 import { describe, expect, it, vi } from "vitest";
 import type { ChatPersonAnswer } from "@workadventure/messages";
 import type { ChatUser } from "../../Connection/ChatConnection";
-import { ChatPeople, chatPeopleOf, firstPicture, worldKnowsWoka } from "../ChatPeopleStore";
+import { ChatPeople, chatPeopleOf, firstPicture, isAwayMember, worldKnowsWoka } from "../ChatPeopleStore";
 
 const WOKA = [{ id: "male1", url: "resources/male1.png" }];
 
@@ -278,6 +278,26 @@ describe("worldKnowsWoka", () => {
         expect(worldKnowsWoka(world, "@bare:m")).toBe(false);
         expect(worldKnowsWoka(world, "@nobody:m")).toBe(false);
         expect(worldKnowsWoka(new Map(), "@nobody:m")).toBe(false);
+    });
+});
+
+describe("isAwayMember", () => {
+    const usersByRoom = (users: ChatUser[]) => new Map([["map", { roomName: "Map", users }]]);
+
+    it("is true for a member the list carries a Woka for who is not in the room, and false for everyone else", () => {
+        const world = usersByRoom([
+            user("@live:m", {
+                spaceUserId: "7",
+                pictureStore: readable("live.png"),
+                storedWoka: readable("stored.png"),
+            }),
+            user("@away:m", { storedWoka: readable("stored.png") }),
+            user("@bare:m"),
+        ]);
+        expect(isAwayMember(world, "@away:m")).toBe(true);
+        expect(isAwayMember(world, "@live:m")).toBe(false);
+        expect(isAwayMember(world, "@bare:m")).toBe(false);
+        expect(isAwayMember(world, "@nobody:m")).toBe(false);
     });
 });
 
