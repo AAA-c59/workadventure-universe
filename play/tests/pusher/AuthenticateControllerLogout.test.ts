@@ -112,6 +112,40 @@ describe("GET /logout", () => {
         renewedTokenMemo.clear();
     });
 
+    it("does not keep a renewal that got in while the provider was revoking the tokens", async () => {
+        verifyJWTToken.mockReturnValue({ identifier: "u", accessToken: "access", refreshToken: "refresh" });
+        const renew = vi.fn().mockResolvedValue({ authToken: "renewed", accessToken: "new-access", checked: {} });
+        renewedTokenMemo.clear();
+        // A /me renewal of this player lands in the middle of the sign-out.
+        logoutUser.mockImplementation(async () => {
+            await renewedTokenMemo.renew("old-game-token", "u", renew);
+        });
+
+        await callLogout({ playUri, token: "header.payload.signature" });
+
+        renew.mockClear();
+        await renewedTokenMemo.renew("old-game-token", "u", renew);
+        expect(renew).toHaveBeenCalledTimes(1);
+        renewedTokenMemo.clear();
+    });
+
+    it("forgets what it remembered even when the provider fails to sign the player out", async () => {
+        verifyJWTToken.mockReturnValue({ identifier: "u", accessToken: "access", refreshToken: "refresh" });
+        const renew = vi.fn().mockResolvedValue({ authToken: "renewed", accessToken: "new-access", checked: {} });
+        renewedTokenMemo.clear();
+        logoutUser.mockImplementation(async () => {
+            await renewedTokenMemo.renew("old-game-token", "u", renew);
+            throw new Error("provider down");
+        });
+
+        await expect(callLogout({ playUri, token: "header.payload.signature" })).rejects.toThrow("provider down");
+
+        renew.mockClear();
+        await renewedTokenMemo.renew("old-game-token", "u", renew);
+        expect(renew).toHaveBeenCalledTimes(1);
+        renewedTokenMemo.clear();
+    });
+
     it("ignores `redirect` for an empty token, so it can't be used to bounce people elsewhere", async () => {
         const res = await callLogout({ playUri, token: "", redirect: "https://evil.example/phish" });
 

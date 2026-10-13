@@ -767,17 +767,22 @@ export class AuthenticateController extends BaseHttpController {
             }
 
             const authTokenData: AuthTokenData = jwtTokenManager.verifyJWTToken(query.token, false);
-            // Nothing remembered from a renewal may outlive the sign-out, not even one still running.
+            // Nothing remembered from a renewal may outlive the sign-out, not even one still running. Forgotten again
+            // once the provider has revoked the tokens: a renewal that got in while it was revoking must not be kept.
             renewedTokenMemo.forgetPlayer(authTokenData.identifier);
             if (authTokenData.accessToken == undefined) {
                 throw Error("Cannot log out, no access token found.");
             }
-            // TODO: change that to use end session endpoint
-            // Use post logout redirect and id token hint to redirect on the logut session endpoint of the OpenId provider
-            // https://openid.net/specs/openid-connect-session-1_0.html#RPLogout
-            await openIDClient.logoutUser(authTokenData.accessToken);
-            if (authTokenData.refreshToken) {
-                await openIDClient.logoutUser(authTokenData.refreshToken);
+            try {
+                // TODO: change that to use end session endpoint
+                // Use post logout redirect and id token hint to redirect on the logut session endpoint of the OpenId provider
+                // https://openid.net/specs/openid-connect-session-1_0.html#RPLogout
+                await openIDClient.logoutUser(authTokenData.accessToken);
+                if (authTokenData.refreshToken) {
+                    await openIDClient.logoutUser(authTokenData.refreshToken);
+                }
+            } finally {
+                renewedTokenMemo.forgetPlayer(authTokenData.identifier);
             }
 
             // if no redirect, redirect to playUri and connect user to the world
