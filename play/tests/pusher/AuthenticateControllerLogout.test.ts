@@ -24,6 +24,7 @@ vi.mock("../../src/pusher/enums/EnvironmentVariable", () => ({
 }));
 
 import { AuthenticateController } from "../../src/pusher/controllers/AuthenticateController";
+import { renewedTokenMemo } from "../../src/pusher/services/RenewedTokenMemo";
 
 type Handler = (req: Request, res: Response) => Promise<void>;
 
@@ -92,6 +93,23 @@ describe("GET /logout", () => {
         expect(logoutUser).toHaveBeenCalledWith("access");
         expect(logoutUser).toHaveBeenCalledWith("refresh");
         expect(res.redirectedTo).toBe(playUri);
+    });
+
+    it("forgets the renewed tokens it remembered for that player, and no one else's", async () => {
+        verifyJWTToken.mockReturnValue({ identifier: "u", accessToken: "access", refreshToken: "refresh" });
+        const renew = vi.fn().mockResolvedValue({ authToken: "renewed", accessToken: "new-access", checked: {} });
+        renewedTokenMemo.clear();
+        await renewedTokenMemo.renew("old-game-token", "u", renew);
+        await renewedTokenMemo.renew("other-game-token", "someone-else", renew);
+        renew.mockClear();
+
+        await callLogout({ playUri, token: "header.payload.signature" });
+
+        await renewedTokenMemo.renew("old-game-token", "u", renew);
+        expect(renew).toHaveBeenCalledTimes(1);
+        await renewedTokenMemo.renew("other-game-token", "someone-else", renew);
+        expect(renew).toHaveBeenCalledTimes(1);
+        renewedTokenMemo.clear();
     });
 
     it("ignores `redirect` for an empty token, so it can't be used to bounce people elsewhere", async () => {
