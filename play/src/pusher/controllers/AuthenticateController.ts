@@ -16,6 +16,7 @@ import { adminService } from "../services/AdminService";
 import { validateQuery } from "../services/QueryValidator";
 import { VerifyDomainService } from "../services/verifyDomain/VerifyDomainService";
 import { matrixProvider } from "../services/MatrixProvider";
+import { renewedTokenMemo } from "../services/RenewedTokenMemo";
 import { BaseHttpController } from "./BaseHttpController";
 
 const debug = Debug("pusher:requests");
@@ -238,7 +239,7 @@ export class AuthenticateController extends BaseHttpController {
                 const { refreshToken } = authTokenData;
                 // Renews the access token through the refresh token, once per request. Null when there is nothing to
                 // renew with or the provider refuses.
-                const doRenewTokens = async () => {
+                const renewWithProvider = async () => {
                     if (!refreshToken) return null;
                     try {
                         const refreshed = await openIDClient.refreshAccessToken(refreshToken);
@@ -258,6 +259,13 @@ export class AuthenticateController extends BaseHttpController {
                         return null;
                     }
                 };
+                // A provider that cancels the old refresh token on renewal would refuse a second renewal of the same
+                // game token, e.g. one the browser sent again after it stopped waiting for the first answer. So the
+                // renewed token is remembered for a minute and handed out again (see RenewedTokenMemo).
+                const doRenewTokens = () =>
+                    refreshToken
+                        ? renewedTokenMemo.renew(token, authTokenData.identifier, renewWithProvider)
+                        : renewWithProvider();
                 let renewalInFlight: ReturnType<typeof doRenewTokens> | undefined;
                 const renewTokens = () => (renewalInFlight ??= doRenewTokens());
 
@@ -759,15 +767,22 @@ export class AuthenticateController extends BaseHttpController {
             }
 
             const authTokenData: AuthTokenData = jwtTokenManager.verifyJWTToken(query.token, false);
+            // Nothing remembered from a renewal may outlive the sign-out, not even one still running. Forgotten again
+            // once the provider has revoked the tokens: a renewal that got in while it was revoking must not be kept.
+            renewedTokenMemo.forgetPlayer(authTokenData.identifier);
             if (authTokenData.accessToken == undefined) {
                 throw Error("Cannot log out, no access token found.");
             }
-            // TODO: change that to use end session endpoint
-            // Use post logout redirect and id token hint to redirect on the logut session endpoint of the OpenId provider
-            // https://openid.net/specs/openid-connect-session-1_0.html#RPLogout
-            await openIDClient.logoutUser(authTokenData.accessToken);
-            if (authTokenData.refreshToken) {
-                await openIDClient.logoutUser(authTokenData.refreshToken);
+            try {
+                // TODO: change that to use end session endpoint
+                // Use post logout redirect and id token hint to redirect on the logut session endpoint of the OpenId provider
+                // https://openid.net/specs/openid-connect-session-1_0.html#RPLogout
+                await openIDClient.logoutUser(authTokenData.accessToken);
+                if (authTokenData.refreshToken) {
+                    await openIDClient.logoutUser(authTokenData.refreshToken);
+                }
+            } finally {
+                renewedTokenMemo.forgetPlayer(authTokenData.identifier);
             }
 
             // if no redirect, redirect to playUri and connect user to the world
