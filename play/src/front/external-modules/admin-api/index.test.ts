@@ -995,6 +995,7 @@ describe("Signing Orbit in when the OIDC access token has run out", () => {
         await openedWith(makeAccessTokenJwt(expired));
         await orbitAsks();
         expect(mocks.pusherGet).toHaveBeenCalledWith("me", {
+            timeout: 10_000,
             params: { token: makeAccessTokenJwt(expired), playUri: "https://play.example.com/@/room" },
         });
         expect(mocks.setAuthToken).toHaveBeenCalledWith(renewedGameToken);
@@ -1017,6 +1018,7 @@ describe("Signing Orbit in when the OIDC access token has run out", () => {
         expect(mocks.pusherGet).toHaveBeenCalledTimes(1);
         // The pusher is told to renew even though the provider may still accept the old token.
         expect(mocks.pusherGet).toHaveBeenCalledWith("me", {
+            timeout: 10_000,
             params: { token: makeAccessTokenJwt(opaque), playUri: "https://play.example.com/@/room", refresh: "true" },
         });
         expect(frame.postMessage).toHaveBeenCalledWith(expect.objectContaining({ accessToken: renewed }), ADMIN);
@@ -1067,6 +1069,7 @@ describe("Signing Orbit in when the OIDC access token has run out", () => {
             mocks.pusherGet.mockResolvedValue(meAnswer(renewed));
             expect(await gameTokenToJoinWith(expired)).toBe(renewed);
             expect(mocks.pusherGet).toHaveBeenCalledWith("me", {
+                timeout: 10_000,
                 params: { token: expired, playUri: "https://play.example.com/@/other-room" },
             });
         });
@@ -1129,6 +1132,23 @@ describe("Signing Orbit in when the OIDC access token has run out", () => {
             mocks.getAuthToken.mockReturnValue(expired);
             mocks.pusherGet.mockRejectedValue(new Error("pusher down"));
             expect(await gameTokenToJoinWith(expired)).toBe(expired);
+        });
+
+        it("joins with the token it has when /me never answers", async () => {
+            const expired = makeAccessTokenJwt(makeOidcToken(nowSeconds() - 10));
+            mocks.getAuthToken.mockReturnValue(expired);
+            // Like axios: a request that gets no answer fails once its `timeout` has passed.
+            mocks.pusherGet.mockImplementation(
+                (_url: string, config: { timeout?: number }) =>
+                    new Promise((_resolve, reject) => {
+                        if (config.timeout) setTimeout(() => reject(new Error("timeout exceeded")), config.timeout);
+                    })
+            );
+            vi.resetModules();
+            const module = await import("./orbitAccessToken");
+            const joined = module.gameTokenToJoinWith(expired, "https://play.example.com/@/other-room", () => true);
+            await vi.advanceTimersByTimeAsync(10_000);
+            expect(await joined).toBe(expired);
         });
     });
 
