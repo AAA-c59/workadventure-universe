@@ -1,0 +1,153 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { MatrixClient } from "matrix-js-sdk";
+import { forgetRememberedRooms, rememberRoomToForget } from "../roomsToForget";
+
+const me = "@me:matrix.test";
+
+function fakeClient(
+    options: { forget?: (roomId: string) => Promise<unknown>; memberships?: Record<string, string> } = {}
+) {
+    const forget = vi.fn(options.forget ?? (() => Promise.resolve({})));
+    const client = {
+        forget,
+        getRoom: (roomId: string) => {
+            const membership = options.memberships?.[roomId];
+            return membership ? { getMyMembership: () => membership } : null;
+        },
+    } as unknown as Pick<MatrixClient, "forget" | "getRoom">;
+    return { client, forget };
+}
+
+describe("rooms that were left but could not be forgotten", () => {
+    beforeEach(() => {
+        localStorage.clear();
+        vi.spyOn(console, "warn").mockImplementation(() => {});
+    });
+
+    it("forgets a room that was written down and stops asking once it worked", async () => {
+        rememberRoomToForget(me, "!a:matrix.test");
+        const { client, forget } = fakeClient();
+
+        await forgetRememberedRooms(client, me);
+        await forgetRememberedRooms(client, me);
+
+        expect(forget).toHaveBeenCalledOnce();
+        expect(forget).toHaveBeenCalledWith("!a:matrix.test");
+    });
+
+    it("writes a room down once, however often it fails", async () => {
+        rememberRoomToForget(me, "!a:matrix.test");
+        rememberRoomToForget(me, "!a:matrix.test");
+        const { client, forget } = fakeClient();
+
+        await forgetRememberedRooms(client, me);
+
+        expect(forget).toHaveBeenCalledOnce();
+    });
+
+    it("keeps a room whose forget fails, and lets it go after five tries in all", async () => {
+        rememberRoomToForget(me, "!a:matrix.test"); // the first try is the failed delete itself
+        const { client, forget } = fakeClient({ forget: () => Promise.reject(new Error("offline")) });
+
+        await forgetRememberedRooms(client, me);
+        await forgetRememberedRooms(client, me);
+        await forgetRememberedRooms(client, me);
+        expect(forget).toHaveBeenCalledTimes(3);
+
+        await forgetRememberedRooms(client, me); // the fifth try in all: it fails and the room is let go
+        await forgetRememberedRooms(client, me);
+        expect(forget).toHaveBeenCalledTimes(4);
+    });
+
+    it("does not forget a room that shows as joined or invited", async () => {
+        rememberRoomToForget(me, "!joined:matrix.test");
+        rememberRoomToForget(me, "!invited:matrix.test");
+        const { client, forget } = fakeClient({
+            memberships: { "!joined:matrix.test": "join", "!invited:matrix.test": "invite" },
+        });
+
+        await forgetRememberedRooms(client, me);
+
+        expect(forget).not.toHaveBeenCalled();
+    });
+
+    it("forgets a room later that still showed as joined because the sync had not brought the leave yet", async () => {
+        rememberRoomToForget(me, "!a:matrix.test");
+        const memberships: Record<string, string> = { "!a:matrix.test": "join" };
+        const { client, forget } = fakeClient({ memberships });
+
+        await forgetRememberedRooms(client, me);
+        expect(forget).not.toHaveBeenCalled();
+
+        memberships["!a:matrix.test"] = "leave"; // the sync arrived
+        await forgetRememberedRooms(client, me);
+        expect(forget).toHaveBeenCalledExactlyOnceWith("!a:matrix.test");
+    });
+
+    it("lets a room that shows as joined go after five tries in all (it was really joined again)", async () => {
+        rememberRoomToForget(me, "!a:matrix.test");
+        const { client, forget } = fakeClient({ memberships: { "!a:matrix.test": "join" } });
+
+        for (let run = 0; run < 5; run++) {
+            // eslint-disable-next-line no-await-in-loop
+            await forgetRememberedRooms(client, me);
+        }
+        expect(localStorage.getItem("universe:matrix:rooms-to-forget:" + me)).toBeNull();
+        expect(forget).not.toHaveBeenCalled();
+    });
+
+    it("keeps a room written down while a run is going", async () => {
+        rememberRoomToForget(me, "!first:matrix.test");
+        let release: (() => void) | undefined;
+        const { client } = fakeClient({
+            forget: () =>
+                new Promise((resolve) => {
+                    release = () => resolve({});
+                }),
+        });
+
+        const running = forgetRememberedRooms(client, me);
+        rememberRoomToForget(me, "!second:matrix.test");
+        release?.();
+        await running;
+
+        const stored = JSON.parse(localStorage.getItem("universe:matrix:rooms-to-forget:" + me) ?? "[]");
+        expect(stored).toEqual([{ roomId: "!second:matrix.test", attempts: 1 }]);
+    });
+
+    it("keeps the list per account", async () => {
+        rememberRoomToForget("@other:matrix.test", "!other:matrix.test");
+        const { client, forget } = fakeClient();
+
+        await forgetRememberedRooms(client, me);
+
+        expect(forget).not.toHaveBeenCalled();
+    });
+
+    it("runs once at a time", async () => {
+        rememberRoomToForget(me, "!a:matrix.test");
+        let release: (() => void) | undefined;
+        const { client, forget } = fakeClient({
+            forget: () =>
+                new Promise((resolve) => {
+                    release = () => resolve({});
+                }),
+        });
+
+        const first = forgetRememberedRooms(client, me);
+        const second = forgetRememberedRooms(client, me);
+        release?.();
+        await Promise.all([first, second]);
+
+        expect(forget).toHaveBeenCalledOnce();
+    });
+
+    it("ignores a damaged list", async () => {
+        localStorage.setItem("universe:matrix:rooms-to-forget:" + me, "{not json");
+        const { client, forget } = fakeClient();
+
+        await forgetRememberedRooms(client, me);
+
+        expect(forget).not.toHaveBeenCalled();
+    });
+});

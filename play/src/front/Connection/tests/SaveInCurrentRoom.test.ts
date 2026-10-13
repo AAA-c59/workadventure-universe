@@ -26,7 +26,13 @@ vi.mock("../ConnectAttemptWatch", () => ({ watchConnectAttempt: vi.fn() }));
 vi.mock("../../WebRtc/HtmlUtils", () => ({ HtmlUtils: {} }));
 
 import { connectionManager } from "../ConnectionManager";
+import { localUserStore } from "../LocalUserStore";
 import type { Room } from "../Room";
+
+/** A game token as the store reads it: three parts, the middle one a JSON payload. */
+function gameToken(payload: object): string {
+    return `header.${window.btoa(JSON.stringify(payload))}.signature`;
+}
 
 const DEFAULT_WORLD = "https://play.example.com/@/default/hub/lobby";
 const OTHER_UNIVERSE = "https://play.example.com/@/studio/film/stage";
@@ -49,6 +55,8 @@ describe("saves from the room the player is in", () => {
         vi.clearAllMocks();
         mocks.post.mockResolvedValue({});
         (connectionManager as unknown as { authToken: string }).authToken = "token";
+        // A signed-in player: the name is kept on their account.
+        localUserStore.setAuthToken(gameToken({ accessToken: "access" }));
     });
 
     it.each([
@@ -64,5 +72,18 @@ describe("saves from the room the player is in", () => {
         connectionManager.setCurrentRoom(room(OTHER_UNIVERSE));
         expect(await save()).toBe(ok);
         expect(lastRoomUrl()).toBe(OTHER_UNIVERSE);
+    });
+});
+
+// The play server saves nothing for a guest yet answers "saved", so the name has to stay on the device. #884
+describe("a guest's name", () => {
+    it("is not sent to the server, so the game keeps it on the device", async () => {
+        vi.clearAllMocks();
+        (connectionManager as unknown as { authToken: string }).authToken = "token";
+        localUserStore.setAuthToken(gameToken({}));
+        connectionManager.setCurrentRoom(room(DEFAULT_WORLD));
+
+        expect(await connectionManager.saveName("Ali")).toBe(false);
+        expect(mocks.post).not.toHaveBeenCalled();
     });
 });

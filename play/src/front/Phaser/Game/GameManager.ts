@@ -22,6 +22,8 @@ import { myCameraStore } from "../../Stores/MyMediaStore";
 import { SelectCompanionSceneName } from "../Login/SelectCompanionScene";
 import { errorScreenStore } from "../../Stores/ErrorScreenStore";
 import { hasCapability } from "../../Connection/Capabilities";
+import type { StepAfterName } from "../../Connection/LocalUserUtils";
+import { stepAfterName } from "../../Connection/LocalUserUtils";
 import type { ChatConnectionInterface } from "../../Chat/Connection/ChatConnection";
 import { MATRIX_PUBLIC_URI } from "../../Enum/EnvironmentVariable";
 import { InvalidLoginTokenError, MatrixClientWrapper } from "../../Chat/Connection/Matrix/MatrixClientWrapper";
@@ -39,6 +41,8 @@ export class GameManager {
     private characterTextureIds: string[] | null;
     private companionTextureId: string | null;
     private startRoom!: Room;
+    /** What the page load decided the player still has to pick, so the step after the name page can follow it. */
+    private loadNextScene: "selectCharacterScene" | "selectCompanionScene" | "gameScene" = "gameScene";
     private currentGameSceneName: string | null = null;
     // Note: this scenePlugin is the scenePlugin of the EntryScene. We should always provide a key in methods called on this scenePlugin.
     private scenePlugin!: Phaser.Scenes.ScenePlugin;
@@ -74,6 +78,7 @@ export class GameManager {
             return EmptySceneName;
         }
         this.startRoom = result.room;
+        this.loadNextScene = result.nextScene;
         this.loadMap(this.startRoom);
 
         const preferredAudioInputDeviceId = localUserStore.getPreferredAudioInputDevice();
@@ -226,6 +231,34 @@ export class GameManager {
         } else {
             this.scenePlugin.run(fallbackSceneName);
         }
+    }
+
+    /**
+     * Leaves the name page. Back in the room when one was left open for it. Otherwise (a visit that starts at the name
+     * page) the Woka picker opens only if the player has no valid Woka yet, as upstream WorkAdventure does: a player
+     * who already has one is not asked to pick it again.
+     */
+    public goToNextSceneAfterName(): void {
+        if (this.currentGameSceneName) {
+            this.tryResumingGame(SelectCharacterSceneName);
+            return;
+        }
+        const scenes: Record<StepAfterName, string> = {
+            wokaPicker: SelectCharacterSceneName,
+            companionPicker: SelectCompanionSceneName,
+            camera: EnableCameraSceneName,
+        };
+        this.scenePlugin.run(
+            scenes[
+                stepAfterName({
+                    // The device's Woka too: a guest back from a login got theirs restored there after this was read.
+                    characterTextureIds: this.characterTextureIds?.length
+                        ? this.characterTextureIds
+                        : localUserStore.getCharacterTextures(),
+                    loadNextScene: this.loadNextScene,
+                })
+            ]
+        );
     }
 
     /**
