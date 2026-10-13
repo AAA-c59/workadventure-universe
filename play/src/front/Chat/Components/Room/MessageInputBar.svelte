@@ -34,6 +34,7 @@
     import ComposerLinkPreview from "../../LinkPreview/ComposerLinkPreview.svelte";
     import GifPicker from "../../Gif/GifPicker.svelte";
     import { withoutPreview } from "../../LinkPreview/ChatLinks";
+    import { appendEmoji } from "./AppendEmoji";
     import MessageInput from "./MessageInput.svelte";
     import ReplyPreview from "./MessageActions/ReplyPreview.svelte";
     import { captureSendDestination, isSendDestinationOpen, spaceGenerationOf } from "./SendDestination";
@@ -665,7 +666,7 @@
             LazyEmote,
             {
                 onEmojiClick: (event: EmojiClickEvent) => {
-                    message += event.detail.unicode ?? "";
+                    message = appendEmoji(message, event.detail.unicode ?? "");
                 },
                 onClose: (event?: Event) => {
                     // The emoji button opens and closes the picker itself: its click is not a click outside. The
