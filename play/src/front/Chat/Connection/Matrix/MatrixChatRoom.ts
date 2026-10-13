@@ -619,7 +619,7 @@ export class MatrixChatRoom
         }
     }
 
-    async leaveRoom(): Promise<void> {
+    async leaveRoom(options: { forget?: boolean } = {}): Promise<void> {
         try {
             if (this.matrixRoom.getMyMembership() === KnownMembership.Join) {
                 // Bounded: a slow member load or kick must not keep the user in the room.
@@ -635,11 +635,16 @@ export class MatrixChatRoom
                 clearTimeout(deadline);
             }
             await this.matrixRoom.client.leave(this.id);
-            return;
         } catch (error) {
             console.error("Unable to leave", error);
             throw new Error("Failed to leave room", { cause: error });
         }
+        if (!options.forget) return;
+        // Left already: forgetting is what removes the room from every app for good. A failure here must not undo the
+        // leave, so the chat is still deleted for this person and the room is left to be forgotten later.
+        await this.matrixRoom.client.forget(this.id).catch((error: unknown) => {
+            console.warn("Left the room but could not forget it", error);
+        });
     }
 
     /**

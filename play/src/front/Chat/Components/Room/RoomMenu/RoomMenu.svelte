@@ -8,6 +8,8 @@
         ChatRoom,
     } from "../../../Connection/ChatConnection";
     import { notificationPlayingStore } from "../../../../Stores/NotificationStore";
+    import { warningMessageStore } from "../../../../Stores/ErrorStore";
+    import { localUserStore } from "../../../../Connection/LocalUserStore";
     import LL from "../../../../../i18n/i18n-svelte";
     import ManageParticipantsModal from "../ManageParticipantsModal.svelte";
     import type { OrderFreeze } from "../../OneList/OneListStore";
@@ -18,6 +20,7 @@
     import { friendsEnabledStore, relationshipsStore } from "../../../Stores/FriendsStore";
     import { invitesEnabledStore } from "../../../Stores/RingStore";
     import { directPartnerStore } from "../DirectChat/DirectPartnerStore";
+    import { partnerStillInChat } from "../DirectChat/partnerStillInChat";
     import {
         canInvitePartner,
         canOpenPartnerProfile,
@@ -57,6 +60,8 @@
     // A direct chat offers what works with that person right now: Walk to and Locate only when they can work.
     const isDirect = room.type === "direct";
     const partner = isDirect ? directPartnerStore(room) : undefined;
+    // The delete text differs once the other person has already deleted the chat.
+    const partnerHolds = partnerStillInChat(room.members, localUserStore.getChatId());
 
     // Invite and Add friend need the person's account, which the chat finds even when they're in another world.
     $: canInvite = $partner ? canInvitePartner($partner, $invitesEnabledStore) : false;
@@ -112,12 +117,16 @@
         const notification = isDirect
             ? $LL.chat.directChat.deleteChat.notification()
             : $LL.chat.roomMenu.leaveRoom.notification();
-        room.leaveRoom()
+        // Deleting a chat leaves it and forgets it, so it goes from the person's lists and not just from view.
+        room.leaveRoom(isDirect ? { forget: true } : undefined)
             .then(() => {
                 if ($selectedRoomStore?.id === room.id) selectedRoomStore.set(undefined);
                 notificationPlayingStore.playNotification(notification);
             })
-            .catch(() => console.error("Failed to leave room"));
+            .catch((error) => {
+                console.error("Failed to leave room", error);
+                if (isDirect) warningMessageStore.addWarningMessage($LL.chat.directChat.deleteChat.failed());
+            });
     }
 
     function openManageParticipantsModal() {
@@ -252,7 +261,9 @@
             <div class="flex flex-col gap-2 p-2 text-sm" data-testid="deleteChatConfirm">
                 <span class="font-bold">{$LL.chat.directChat.deleteChat.confirm()}</span>
                 <span class="max-w-56 text-xs text-white/60"
-                    >{$LL.chat.directChat.deleteChat.hint({ name: $roomName })}</span
+                    >{$partnerHolds
+                        ? $LL.chat.directChat.deleteChat.hint({ name: $roomName })
+                        : $LL.chat.directChat.deleteChat.hintGone({ name: $roomName })}</span
                 >
                 <div class="flex gap-2">
                     <button

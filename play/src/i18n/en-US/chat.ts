@@ -381,6 +381,8 @@ const chat: BaseTranslation = {
         deleteChat: {
             label: "Delete chat",
             hint: "Only for you. {name:string} still has it.",
+            hintGone: "{name:string} already deleted this chat. If you delete it too, nobody can open it again.",
+            failed: "The chat could not be deleted. Check your connection and try again.",
             confirm: "Delete this chat?",
             confirmButton: "Delete",
             cancel: "Cancel",
