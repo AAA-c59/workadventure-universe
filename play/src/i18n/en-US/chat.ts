@@ -595,6 +595,7 @@ const chat: BaseTranslation = {
     dismiss: "Dismiss",
     whoops: "Whoops ! something went wrong",
     failedToOpenRoom: "Failed to open group : {roomId}",
+    chatsStillLoading: "Your chats are still loading. Try again in a moment.",
     refreshChatError: "Failed to refresh chat",
     discord: {
         chatBand: {

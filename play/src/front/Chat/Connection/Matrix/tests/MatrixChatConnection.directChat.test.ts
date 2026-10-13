@@ -6,6 +6,7 @@ import { readable, writable } from "svelte/store";
 import type { MatrixChatRoom } from "../MatrixChatRoom";
 import type { MatrixSecurity } from "../MatrixSecurity";
 import { MatrixChatConnection } from "../MatrixChatConnection";
+import { ChatsStillLoadingError } from "../../ChatsStillLoadingError";
 
 vi.mock("../MatrixChatRoom", () => ({ MatrixChatRoom: vi.fn() }));
 vi.mock("../../../../Phaser/Game/GameManager", () => ({
@@ -105,6 +106,14 @@ describe("MatrixChatConnection: the chat with one person", () => {
             getUserId: () => ME,
             getRoom: (id: string) => sdkRooms.get(id) ?? null,
             getAccountData: () => (directMap ? { getContent: () => directMap } : undefined),
+            getSafeUserId: () => ME,
+            // The list is read from the server before every save; the fake server holds `directMap`.
+            http: {
+                authedRequest: () =>
+                    directMap
+                        ? Promise.resolve(directMap)
+                        : Promise.reject(Object.assign(new Error("not found"), { data: { errcode: "M_NOT_FOUND" } })),
+            },
             setAccountData,
             createRoom,
             invite,
@@ -357,24 +366,16 @@ describe("MatrixChatConnection: the chat with one person", () => {
                 expect(createRoom).not.toHaveBeenCalled();
             });
 
-            it("stops waiting after a few seconds when the sync does not finish", async () => {
+            it("makes no room when the chats still have not loaded after a few seconds, and says so", async () => {
                 vi.useFakeTimers();
                 try {
-                    vi.spyOn(
-                        connection as unknown as { waitForNextSync: () => Promise<void> },
-                        "waitForNextSync"
-                    ).mockResolvedValue();
-                    vi.spyOn(
-                        connection as unknown as { createAndAddNewRootRoom: (room: unknown) => unknown },
-                        "createAndAddNewRootRoom"
-                    ).mockReturnValue("a chat");
-                    sdkRooms.set("!new:matrix.test", { roomId: "!new:matrix.test" });
-
                     const opening = connection.createDirectRoom(ALICE);
+                    const failure = expect(opening).rejects.toBeInstanceOf(ChatsStillLoadingError);
                     await vi.advanceTimersByTimeAsync(8000);
 
-                    await expect(opening).resolves.toBe("a chat");
-                    expect(createRoom).toHaveBeenCalledOnce();
+                    await failure;
+                    expect(createRoom).not.toHaveBeenCalled();
+                    expect(setAccountData).not.toHaveBeenCalled();
                 } finally {
                     vi.useRealTimers();
                 }
@@ -484,6 +485,72 @@ describe("MatrixChatConnection: the chat with one person", () => {
     });
 
     describe("repairing the account's list of direct chats", () => {
+        it("opening the chat waits for a repair that is running, and opens the chat it lists instead of making one", async () => {
+            const room = addRoom("!chat", { type: "multiple", dmInviter: ALICE });
+            let finishSave: (() => void) | undefined;
+            setAccountData.mockImplementationOnce(
+                (_type: string, next: Record<string, string[]>) =>
+                    new Promise((resolve) => {
+                        finishSave = () => {
+                            directMap = next;
+                            resolve({});
+                        };
+                    })
+            );
+            connection["repairDirectAccountData"]();
+            await vi.waitFor(() => expect(finishSave).toBeDefined());
+
+            const opening = connection.createDirectRoom(ALICE);
+            await Promise.resolve();
+            expect(createRoom).not.toHaveBeenCalled();
+            finishSave?.();
+
+            await expect(opening).resolves.toBe(room);
+            expect(createRoom).not.toHaveBeenCalled();
+        });
+
+        it("opening the chat goes on after a few seconds when the repair is stuck", async () => {
+            vi.useFakeTimers();
+            try {
+                addRoom("!stuck", { type: "multiple", dmInviter: ALICE });
+                // The save of the repair takes far longer than opening a chat is willing to wait.
+                setAccountData.mockImplementationOnce(
+                    () =>
+                        new Promise((resolve) => {
+                            setTimeout(() => resolve({}), 20_000);
+                        })
+                );
+                vi.spyOn(
+                    connection as unknown as { waitForNextSync: () => Promise<void> },
+                    "waitForNextSync"
+                ).mockResolvedValue();
+                vi.spyOn(
+                    connection as unknown as { createAndAddNewRootRoom: (room: unknown) => unknown },
+                    "createAndAddNewRootRoom"
+                ).mockReturnValue("a chat");
+                sdkRooms.set("!new:matrix.test", { roomId: "!new:matrix.test" });
+
+                connection["repairDirectAccountData"]();
+                const opening = connection.createDirectRoom("@bob:matrix.test");
+                await vi.advanceTimersByTimeAsync(4000);
+                expect(createRoom).toHaveBeenCalledOnce();
+
+                await vi.advanceTimersByTimeAsync(30_000);
+                await expect(opening).resolves.toBe("a chat");
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
+        it("counts a chat a repair listed as a direct chat before the client's own copy shows it", () => {
+            const room = addRoom("!chat", { type: "multiple", dmInviter: ALICE });
+            expect(connection.getDirectRoomFor(ALICE)).toBeUndefined();
+
+            connection["repairedDirect"] = { [ALICE]: ["!chat"] };
+
+            expect(connection.getDirectRoomFor(ALICE)).toBe(room);
+        });
+
         it("lists a joined chat that still carries the direct flag of the invite and is not listed", async () => {
             addRoom("!chat", { type: "multiple", dmInviter: ALICE });
 
