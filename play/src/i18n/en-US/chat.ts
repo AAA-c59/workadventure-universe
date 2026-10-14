@@ -22,6 +22,7 @@ const chat: BaseTranslation = {
     chat: "Chat",
     userList: {
         disconnected: "Offline",
+        onlineElsewhere: "Online, not in this world",
         isHere: "On this map",
         inAnotherMap: "In another map",
         in: "In ",
@@ -380,6 +381,8 @@ const chat: BaseTranslation = {
         deleteChat: {
             label: "Delete chat",
             hint: "Only for you. {name:string} still has it.",
+            hintGone: "{name:string} already deleted this chat. If you delete it too, nobody can open it again.",
+            failed: "The chat could not be deleted. Check your connection and try again.",
             confirm: "Delete this chat?",
             confirmButton: "Delete",
             cancel: "Cancel",
@@ -549,6 +552,22 @@ const chat: BaseTranslation = {
         play: "Play {title}",
         sendWithoutPreview: "Send without a preview",
     },
+    gifPicker: {
+        button: "GIF",
+        title: "GIFs",
+        searchPlaceholder: "Search Klipy",
+        back: "Back",
+        clearSearch: "Clear search",
+        trending: "Trending GIFs",
+        loading: "Loading GIFs",
+        loadError: "Klipy can't be reached",
+        loadErrorHint: "Check your connection, then try again.",
+        retry: "Try again",
+        noResults: "No GIFs for “{query}”",
+        noResultsHint: "Try another word, or one of these:",
+        noTrending: "No GIFs right now.",
+        send: "Send GIF {title}",
+    },
     fileAttachment: {
         title: "File attachment",
         description: "Upload and share a file",
@@ -576,6 +595,7 @@ const chat: BaseTranslation = {
     dismiss: "Dismiss",
     whoops: "Whoops ! something went wrong",
     failedToOpenRoom: "Failed to open group : {roomId}",
+    chatsStillLoading: "Your chats are still loading. Try again in a moment.",
     refreshChatError: "Failed to refresh chat",
     discord: {
         chatBand: {
@@ -716,6 +736,7 @@ const chat: BaseTranslation = {
         unblock: "Unblock",
         unblockUser: "Unblock {userName}",
         addFriend: "Add friend",
+        addFriendHint: "{name:string} gets a friend request.",
         addUserAsFriend: "Add {userName} as a friend",
         requestSent: "Request sent",
         cancelRequest: "Cancel friend request",

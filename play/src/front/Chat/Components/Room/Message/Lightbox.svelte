@@ -75,7 +75,16 @@
         tx = 0;
         ty = 0;
     }
-    $: lightboxOpenStore.set(show);
+    // Every picture and GIF in the chat has its own viewer, mostly closed. Only the one that is open speaks for the
+    // game's keys, so a closed viewer mounting or leaving never hands them back while another one is on screen.
+    let openedStore = false;
+    $: if (show) {
+        lightboxOpenStore.set(true);
+        openedStore = true;
+    } else if (openedStore) {
+        lightboxOpenStore.set(false);
+        openedStore = false;
+    }
 
     // Reset transform on image navigation so zoom/pan doesn't persist between images
     $: if (show && src) {
@@ -86,7 +95,7 @@
 
     // Clean up store on destroy so input doesn't stay blocked after unmount
     onDestroy(() => {
-        lightboxOpenStore.set(false);
+        if (openedStore) lightboxOpenStore.set(false);
     });
 
     // Scroll active thumbnail into view

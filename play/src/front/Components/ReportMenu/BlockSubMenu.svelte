@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { onMount } from "svelte";
+    import { onDestroy } from "svelte";
     import { blackListManager } from "../../WebRtc/BlackListManager";
     import { showReportScreenStore, userReportEmpty } from "../../Stores/ShowReportScreenStore";
     import { LL } from "../../../i18n/i18n-svelte";
@@ -9,13 +9,21 @@
     export let userName: string;
     let userIsBlocked = false;
 
-    onMount(() => {
-        if (userUUID === undefined) {
-            userIsBlocked = false;
-            console.error("There is no user to block");
-        } else {
-            userIsBlocked = blackListManager.isBlackListed(userUUID);
-        }
+    // Follow the block list, not only the first open: a popup reopened during its fade-out
+    // is reused and never remounts, so a label set in onMount went stale (#902).
+    function refreshBlocked(uuid: string | undefined): void {
+        userIsBlocked = uuid !== undefined && blackListManager.isBlackListed(uuid);
+    }
+
+    $: refreshBlocked(userUUID);
+
+    const blockListSubscriptions = [
+        blackListManager.onBlockStream.subscribe(() => refreshBlocked(userUUID)),
+        blackListManager.onUnBlockStream.subscribe(() => refreshBlocked(userUUID)),
+    ];
+
+    onDestroy(() => {
+        blockListSubscriptions.forEach((subscription) => subscription.unsubscribe());
     });
 
     function blockUser(): void {

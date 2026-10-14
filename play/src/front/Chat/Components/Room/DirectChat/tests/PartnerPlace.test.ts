@@ -3,7 +3,7 @@ import { AvailabilityStatus } from "@workadventure/messages";
 import { readable } from "svelte/store";
 import type { ChatUser } from "../../../../Connection/ChatConnection";
 import type { PartnerPlaceInput } from "../PartnerPlace";
-import { findInUniverse, isInUniverse, partnerActions, resolvePartnerPlace } from "../PartnerPlace";
+import { findAccountUuid, findInUniverse, isInUniverse, partnerActions, resolvePartnerPlace } from "../PartnerPlace";
 
 const inGameHere: PartnerPlaceInput = {
     inGame: true,
@@ -110,5 +110,21 @@ describe("findInUniverse", () => {
             user: { playUri: "https://play/a" },
         });
         expect(findInUniverse(map, "@bob:x", "https://play/c")).toMatchObject({ roomName: "Rooftop" });
+    });
+});
+
+describe("findAccountUuid", () => {
+    const person = (chatId: string, uuid?: string) => ({ chatId, uuid } as ChatUser);
+
+    it("finds an away member's account id in the member list, which has no map", () => {
+        const map = new Map([[undefined, { users: [person("@ada:chat", "uuid-ada")] }]]);
+        expect(findAccountUuid(map, [], "@ada:chat")).toBe("uuid-ada");
+    });
+
+    it("falls back to your friends, and to nothing for a stranger", () => {
+        const map = new Map([[undefined, { users: [person("@ada:chat")] }]]);
+        const friends = [{ uuid: "uuid-bob", chatId: "@bob:chat" }];
+        expect(findAccountUuid(map, friends, "@bob:chat")).toBe("uuid-bob");
+        expect(findAccountUuid(map, friends, "@ada:chat")).toBeUndefined();
     });
 });

@@ -20,10 +20,9 @@ import { JitsiCoWebsite } from "../../WebRtc/CoWebsite/JitsiCoWebsite";
 import { audioManagerFileStore, audioManagerVisibilityStore } from "../../Stores/AudioManagerStore";
 import { iframeListener } from "../../Api/IframeListener";
 import { Room } from "../../Connection/Room";
-import { LL } from "../../../i18n/i18n-svelte";
 import { inBbbStore, inJitsiStore, inOpenWebsite, isSpeakerStore, silentStore } from "../../Stores/MediaStore";
 import { currentLiveStreamingSpaceStore } from "../../Stores/MegaphoneStore";
-import { isMediaBreakpointUp } from "../../Utils/BreakpointsUtils";
+import { getTriggerHint } from "../../Utils/TriggerHint";
 import type { Area } from "../Entity/Area";
 import { popupStore } from "../../Stores/PopupStore";
 import PopUpJitsi from "../../Components/PopUp/PopUpJitsi.svelte";
@@ -79,9 +78,7 @@ export class GameMapPropertiesListener {
                 if (forceTrigger || openWebsiteTriggerValue === ON_ACTION_TRIGGER_BUTTON) {
                     let message = allProps.get(GameMapProperties.OPEN_WEBSITE_TRIGGER_MESSAGE);
                     if (message === undefined) {
-                        message = isMediaBreakpointUp("md")
-                            ? get(LL).trigger.mobile.newTab()
-                            : get(LL).trigger.newTab();
+                        message = getTriggerHint("newTab");
                     }
 
                     popupStore.addPopup(
@@ -256,9 +253,7 @@ export class GameMapPropertiesListener {
             if (forceTrigger || jitsiTriggerValue === ON_ACTION_TRIGGER_BUTTON) {
                 let message = allProps.get(GameMapProperties.JITSI_TRIGGER_MESSAGE);
                 if (message === undefined) {
-                    message = isMediaBreakpointUp("md")
-                        ? get(LL).trigger.mobile.jitsiRoom()
-                        : get(LL).trigger.jitsiRoom();
+                    message = getTriggerHint("jitsiRoom");
                 }
 
                 popupStore.addPopup(
@@ -654,9 +649,7 @@ export class GameMapPropertiesListener {
 
         if (localUserStore.getForceCowebsiteTrigger() || websiteTriggerProperty === ON_ACTION_TRIGGER_BUTTON) {
             if (!websiteTriggerMessageProperty) {
-                websiteTriggerMessageProperty = isMediaBreakpointUp("md")
-                    ? get(LL).trigger.mobile.cowebsite()
-                    : get(LL).trigger.cowebsite();
+                websiteTriggerMessageProperty = getTriggerHint("cowebsite");
             }
 
             this.coWebsitesActionTriggerByPlace.set(this.getIdFromPlace(place), actionId);

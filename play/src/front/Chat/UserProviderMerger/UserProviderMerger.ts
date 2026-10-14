@@ -82,6 +82,13 @@ export class UserProviderMerger {
     setFilter(searchText: string): Promise<void[]> {
         return Promise.all(this.userProviders.map((userProvider) => userProvider.setFilter(searchText)));
     }
+
+    /** Lets the providers that keep a list read it again when it has become old (see `refreshIfStale`). */
+    async refreshStaleProviders(): Promise<void> {
+        await Promise.all(
+            this.userProviders.map((userProvider) => userProvider.refreshIfStale?.() ?? Promise.resolve())
+        );
+    }
 }
 
 /**
@@ -118,6 +125,9 @@ function mergeEntries(chatUserList: PartialAnyKindOfUser[]): AnyKindOfUser {
             chatId: user.chatId || acc.chatId,
             uuid: user.uuid || acc.uuid,
             username: user.username || acc.username,
+            // The name in Universe, from the world (live) or the back office, never the chat account's: later providers win.
+            gameName: user.gameName || acc.gameName,
+            storedWoka: user.storedWoka || acc.storedWoka,
             availabilityStatus: user.availabilityStatus || acc.availabilityStatus,
             pictureStore: user.pictureStore || acc.pictureStore,
             roomName: user.roomName || acc.roomName,

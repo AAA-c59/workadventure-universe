@@ -86,10 +86,18 @@ async function makeCameraManager(mapSize = { width: 1000, height: 1000 }) {
         setFocusTarget: vi.fn(),
         getFocusTarget: vi.fn(),
         getTargetZoomModifierFor: () => 1,
+        applyNewSize: vi.fn(),
     };
     const manager = new CameraManager(scene as never, mapSize, scale as never);
-    return { manager, camera, currentPlayer, remote, scene };
+    return { manager, camera, currentPlayer, remote, scene, scale };
 }
+
+describe("CameraManager on a new scene", () => {
+    it("hands its camera to the scale manager so a kept zoom and later resizes apply to it", async () => {
+        const { camera, scale } = await makeCameraManager();
+        expect(scale.applyNewSize).toHaveBeenCalledWith(camera);
+    });
+});
 
 describe("CameraManager following another player", () => {
     it("leaves the camera alone when nobody else is followed (the woka menu store starts empty)", async () => {

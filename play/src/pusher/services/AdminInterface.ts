@@ -7,12 +7,13 @@ import type {
     OauthRefreshToken,
     RoomRedirect,
     Capabilities,
+    WokaMine,
 } from "@workadventure/messages";
 import type { AdminBannedData, FetchMemberDataByUuidResponse } from "./AdminApi";
 import type { BanAppealResult, BanDetailsData } from "./BanDetails";
 import type { ShortMapDescriptionList } from "./ShortMapDescription";
 import type { UniverseRoomsData } from "./UniverseRooms";
-import type { WorldChatMembersData } from "./WorldChatMembersData";
+import type { ChatPersonData, WorldChatMembersData } from "./WorldChatMembersData";
 
 export interface AdminInterface {
     /**
@@ -139,6 +140,12 @@ export interface AdminInterface {
 
     saveCompanionTexture(userIdentifier: string, texture: string | null, roomUrl: string): Promise<void>;
 
+    /**
+     * What the player wears and wore lately, as seen from this room. Undefined when the admin has no such answer
+     * (it does not offer it, or the player is a guest). Throws when the admin fails.
+     */
+    getWokaMine(userIdentifier: string, roomUrl: string): Promise<WokaMine | undefined>;
+
     getCapabilities(): Promise<Capabilities>;
 
     searchMembers(roomUrl: string, searchText: string): Promise<MemberData[]>;
@@ -149,6 +156,12 @@ export interface AdminInterface {
     getMember(memberUUID: string, roomUrl?: string): Promise<MemberData>;
 
     getWorldChatMembers(playUri: string, searchText: string): Promise<WorldChatMembersData>;
+
+    /**
+     * One person's current name and Woka by chat ID, as the back office shows them from the asker's room. Undefined
+     * when the back office has no one with that chat ID.
+     */
+    getChatPerson(chatId: string, playUri: string): Promise<ChatPersonData | undefined>;
 
     updateChatId(userIdentifier: string, chatId: string, roomUrl: string): Promise<void>;
 

@@ -1,5 +1,7 @@
 <script lang="ts">
-    import { getContext, onDestroy, onMount } from "svelte";
+    import { getContext, hasContext, onDestroy, onMount } from "svelte";
+    import { readable } from "svelte/store";
+    import type { Readable } from "svelte/store";
     import { openModal } from "svelte-modals";
     import type {
         ChatRoomMembershipManagement,
@@ -8,6 +10,8 @@
         ChatRoom,
     } from "../../../Connection/ChatConnection";
     import { notificationPlayingStore } from "../../../../Stores/NotificationStore";
+    import { warningMessageStore } from "../../../../Stores/ErrorStore";
+    import { localUserStore } from "../../../../Connection/LocalUserStore";
     import LL from "../../../../../i18n/i18n-svelte";
     import ManageParticipantsModal from "../ManageParticipantsModal.svelte";
     import type { OrderFreeze } from "../../OneList/OneListStore";
@@ -15,11 +19,18 @@
     import { openChatMenuStore } from "../../../Stores/OpenChatMenuStore";
     import { selectedRoomStore } from "../../../Stores/SelectRoomStore";
     import { openProfileRoomIdStore } from "../../../Stores/PartnerProfileStore";
+    import { friendsEnabledStore, relationshipsStore } from "../../../Stores/FriendsStore";
+    import { invitesEnabledStore } from "../../../Stores/RingStore";
+    import { NAME_BY_CHAT_ID_CONTEXT, personName } from "../../../Stores/ChatUserWokaStore";
     import { directPartnerStore } from "../DirectChat/DirectPartnerStore";
+    import { partnerStillInChat } from "../DirectChat/partnerStillInChat";
     import {
+        canInvitePartner,
         canOpenPartnerProfile,
+        invitePartner,
         locatePartner,
         openPartnerProfile,
+        partnerFriendAction,
         walkToPartner,
     } from "../DirectChat/PartnerActions";
     import RoomOption from "./RoomOption.svelte";
@@ -33,6 +44,7 @@
         IconWalk,
         IconTrash,
         IconUserCircle,
+        IconUsersPlus,
     } from "@wa-icons";
 
     export let room: ChatRoom & ChatRoomMembershipManagement & ChatRoomNotificationControl & ChatRoomModeration;
@@ -51,6 +63,20 @@
     // A direct chat offers what works with that person right now: Walk to and Locate only when they can work.
     const isDirect = room.type === "direct";
     const partner = isDirect ? directPartnerStore(room) : undefined;
+    // The delete text differs once the other person has already deleted the chat.
+    const partnerHolds = partnerStillInChat(room.members, localUserStore.getChatId());
+
+    // The name they go by now, like the chat's header and profile: the room keeps the name it had when it was made.
+    const nameByChatId: Readable<Map<string, string>> = hasContext(NAME_BY_CHAT_ID_CONTEXT)
+        ? getContext(NAME_BY_CHAT_ID_CONTEXT)
+        : readable(new Map<string, string>());
+    $: name = personName($nameByChatId, $partner?.chatId, $roomName);
+
+    // Invite and Add friend need the person's account, which the chat finds even when they're in another world.
+    $: canInvite = $partner ? canInvitePartner($partner, $invitesEnabledStore) : false;
+    $: friendAction = $partner
+        ? partnerFriendAction($partner, name, $friendsEnabledStore, $relationshipsStore, $LL)
+        : undefined;
 
     // Inside the one chat list, the list holds its order still while this menu is open.
     const orderFreeze = getContext<OrderFreeze | undefined>(ONE_LIST_FREEZE_CONTEXT);
@@ -100,12 +126,16 @@
         const notification = isDirect
             ? $LL.chat.directChat.deleteChat.notification()
             : $LL.chat.roomMenu.leaveRoom.notification();
-        room.leaveRoom()
+        // Deleting a chat leaves it and forgets it, so it goes from the person's lists and not just from view.
+        room.leaveRoom(isDirect ? { forget: true } : undefined)
             .then(() => {
                 if ($selectedRoomStore?.id === room.id) selectedRoomStore.set(undefined);
                 notificationPlayingStore.playNotification(notification);
             })
-            .catch(() => console.error("Failed to leave room"));
+            .catch((error) => {
+                console.error("Failed to leave room", error);
+                if (isDirect) warningMessageStore.addWarningMessage($LL.chat.directChat.deleteChat.failed());
+            });
     }
 
     function openManageParticipantsModal() {
@@ -125,13 +155,23 @@
         });
     }
 
+    function invite() {
+        if ($partner) invitePartner($partner, name);
+        toggleRoomOptions();
+    }
+
+    function runFriendAction() {
+        friendAction?.act();
+        toggleRoomOptions();
+    }
+
     function walkTo() {
         if ($partner) walkToPartner($partner);
         toggleRoomOptions();
     }
 
     function locate() {
-        if ($partner) locatePartner($partner, $roomName);
+        if ($partner) locatePartner($partner, name);
         toggleRoomOptions();
     }
 
@@ -165,6 +205,14 @@
     data-testid="roomMenu"
 >
     {#if isDirect}
+        {#if canInvite}
+            <RoomOption
+                dataTestId="inviteOption"
+                IconComponent={IconUsersPlus}
+                title={$LL.chat.friends.ring.ring()}
+                on:click={invite}
+            />
+        {/if}
         {#if $partner?.actions.walkTo}
             <RoomOption IconComponent={IconWalk} title={$LL.chat.userList.walkTo()} on:click={walkTo} />
         {/if}
@@ -177,6 +225,14 @@
             title={$LL.chat.userList.viewProfile()}
             on:click={viewProfile}
         />
+        {#if friendAction && !friendAction.danger}
+            <RoomOption
+                dataTestId="friendActionOption"
+                IconComponent={friendAction.icon}
+                title={friendAction.label}
+                on:click={runFriendAction}
+            />
+        {/if}
     {/if}
     {#if shouldDisplayManageParticipantButton}
         <RoomOption
@@ -201,11 +257,22 @@
 
     {#if isDirect}
         <div class="u-menu-divider" />
+        {#if friendAction?.danger}
+            <RoomOption
+                dataTestId="friendActionOption"
+                IconComponent={friendAction.icon}
+                title={friendAction.label}
+                bg="u-danger"
+                on:click={runFriendAction}
+            />
+        {/if}
         {#if confirmingDelete}
             <div class="flex flex-col gap-2 p-2 text-sm" data-testid="deleteChatConfirm">
                 <span class="font-bold">{$LL.chat.directChat.deleteChat.confirm()}</span>
                 <span class="max-w-56 text-xs text-white/60"
-                    >{$LL.chat.directChat.deleteChat.hint({ name: $roomName })}</span
+                    >{$partnerHolds
+                        ? $LL.chat.directChat.deleteChat.hint({ name })
+                        : $LL.chat.directChat.deleteChat.hintGone({ name })}</span
                 >
                 <div class="flex gap-2">
                     <button

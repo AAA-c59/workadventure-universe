@@ -10,19 +10,34 @@
     } from "../../../Connection/ChatConnection";
     import type { PictureStore } from "../../../../Stores/PictureStore";
     import { notificationPlayingStore } from "../../../../Stores/NotificationStore";
-    import { PERSON_COLOUR_CONTEXT, WOKA_BY_CHAT_ID_CONTEXT, personPicture } from "../../../Stores/ChatUserWokaStore";
+    import { warningMessageStore } from "../../../../Stores/ErrorStore";
+    import { localUserStore } from "../../../../Connection/LocalUserStore";
+    import {
+        NAME_BY_CHAT_ID_CONTEXT,
+        PERSON_COLOUR_CONTEXT,
+        WOKA_BY_CHAT_ID_CONTEXT,
+        personName,
+        personPicture,
+    } from "../../../Stores/ChatUserWokaStore";
+    import { requestChatPerson } from "../../../Stores/ChatPeopleLookup";
     import type { PersonColourOf } from "../../../Stores/ChatUserWokaStore";
     import { selectedRoomStore } from "../../../Stores/SelectRoomStore";
+    import { friendsEnabledStore, relationshipsStore } from "../../../Stores/FriendsStore";
+    import { invitesEnabledStore } from "../../../Stores/RingStore";
     import TopRowAvatar from "../../TopRow/TopRowAvatar.svelte";
     import VisitCard from "../../../../Components/VisitCard/VisitCard.svelte";
     import type { DirectPartner } from "./DirectPartnerStore";
     import { isInUniverse } from "./PartnerPlace";
     import { partnerStatus } from "./PartnerStatus";
+    import { partnerStillInChat } from "./partnerStillInChat";
     import {
+        canInvitePartner,
         canOpenPartnerProfile,
         canReportPartner,
+        invitePartner,
         locatePartner,
         openPartnerProfile,
+        partnerFriendAction,
         reportPartner,
         setPartnerBlocked,
         walkToPartner,
@@ -36,6 +51,7 @@
         IconMute,
         IconTrash,
         IconUserCircle,
+        IconUsersPlus,
         IconWalk,
     } from "@wa-icons";
 
@@ -49,10 +65,15 @@
     const dispatch = createEventDispatcher<{ close: void }>();
     const roomName = room.name;
     const areNotificationsMuted = room.areNotificationsMuted;
+    // The delete text differs once the other person has already deleted the chat.
+    const partnerHolds = partnerStillInChat(room.members, localUserStore.getChatId());
     const direction = document.documentElement.getAttribute("dir") || "ltr";
     const wokaByChatId: Readable<Map<string, PictureStore>> = hasContext(WOKA_BY_CHAT_ID_CONTEXT)
         ? getContext(WOKA_BY_CHAT_ID_CONTEXT)
         : readable(new Map<string, PictureStore>());
+    const nameByChatId: Readable<Map<string, string>> = hasContext(NAME_BY_CHAT_ID_CONTEXT)
+        ? getContext(NAME_BY_CHAT_ID_CONTEXT)
+        : readable(new Map<string, string>());
     const colourOf: Readable<PersonColourOf> = hasContext(PERSON_COLOUR_CONTEXT)
         ? getContext(PERSON_COLOUR_CONTEXT)
         : readable(() => undefined);
@@ -60,11 +81,19 @@
     let confirmingDelete = false;
     let blockInProgress = false;
 
+    // Someone outside the world is asked of Orbit (once), for their Woka and the name they go by.
+    $: partnerChatId = partner.chatId;
+    $: requestChatPerson(partnerChatId);
+    $: name = personName($nameByChatId, partnerChatId, $roomName);
     $: picture = personPicture($wokaByChatId, partner.chatId, undefined) ?? room.pictureStore;
     $: status = partnerStatus(partner.place, $LL);
     $: live = isInUniverse(partner.place);
     $: canViewProfile = canOpenPartnerProfile(partner);
-    $: tiles = [partner.actions.walkTo, partner.actions.locate, canViewProfile].filter(Boolean).length;
+    $: canInvite = canInvitePartner(partner, $invitesEnabledStore);
+    $: tiles = [canInvite, partner.actions.walkTo, partner.actions.locate, canViewProfile].filter(Boolean).length;
+    // Add friend, or what comes next with them. Remove friend is red, so it sits with the other red rows.
+    $: friendAction = partnerFriendAction(partner, name, $friendsEnabledStore, $relationshipsStore, $LL);
+    $: friendRequestPossible = partner.uuid !== undefined && !$relationshipsStore.has(partner.uuid);
 
     function toggleMute() {
         const change = $areNotificationsMuted ? room.unmuteNotification() : room.muteNotification();
@@ -80,13 +109,17 @@
     }
 
     function deleteChat() {
-        room.leaveRoom()
+        // Deleting a chat leaves it and forgets it, so it goes from the person's lists and not just from view.
+        room.leaveRoom({ forget: true })
             .then(() => {
                 dispatch("close");
                 if ($selectedRoomStore?.id === room.id) selectedRoomStore.set(undefined);
                 notificationPlayingStore.playNotification($LL.chat.directChat.deleteChat.notification());
             })
-            .catch((error) => console.error("Failed to delete the chat", error));
+            .catch((error) => {
+                console.error("Failed to delete the chat", error);
+                warningMessageStore.addWarningMessage($LL.chat.directChat.deleteChat.failed());
+            });
     }
 </script>
 
@@ -113,8 +146,8 @@
             <div class="relative mb-1.5">
                 <TopRowAvatar
                     pictureStore={picture}
-                    name={$roomName}
-                    color={$colourOf(partner.chatId, $roomName)}
+                    {name}
+                    color={$colourOf(partner.chatId, name)}
                     size="xl"
                     ring={false}
                 />
@@ -132,7 +165,7 @@
                 {/if}
             </div>
             <div class="max-w-full break-words text-lg font-bold leading-6" data-testid="partnerProfileName">
-                {$roomName}
+                {name}
             </div>
             <div class="flex max-w-full items-center gap-1.5 text-xs text-white/60" data-testid="partnerProfileStatus">
                 <span
@@ -149,6 +182,17 @@
 
         {#if tiles > 0}
             <div class="grid gap-2" style:grid-template-columns="repeat({tiles}, minmax(0, 1fr))">
+                {#if canInvite}
+                    <button
+                        type="button"
+                        class="partner-tile"
+                        data-testid="partnerInvite"
+                        on:click={() => invitePartner(partner, name)}
+                    >
+                        <span class="partner-tile-icon"><IconUsersPlus font-size="20" /></span>
+                        {$LL.chat.friends.ring.ring()}
+                    </button>
+                {/if}
                 {#if partner.actions.walkTo}
                     <button type="button" class="partner-tile" on:click={() => walkToPartner(partner)}>
                         <span class="partner-tile-icon"><IconWalk font-size="20" /></span>
@@ -156,7 +200,7 @@
                     </button>
                 {/if}
                 {#if partner.actions.locate}
-                    <button type="button" class="partner-tile" on:click={() => locatePartner(partner, $roomName)}>
+                    <button type="button" class="partner-tile" on:click={() => locatePartner(partner, name)}>
                         <span class="partner-tile-icon"><IconMapPin font-size="20" /></span>
                         {$LL.chat.userList.follow()}
                     </button>
@@ -172,6 +216,25 @@
                         {$LL.chat.directChat.profile.fullProfile()}
                     </button>
                 {/if}
+            </div>
+        {/if}
+
+        {#if friendAction && !friendAction.danger}
+            <div class="partner-group">
+                <button
+                    type="button"
+                    class="u-menu-row !m-0"
+                    data-testid="partnerFriendAction"
+                    on:click={friendAction.act}
+                >
+                    <span class="u-menu-tile"><svelte:component this={friendAction.icon} /></span>
+                    <span class="flex min-w-0 flex-1 flex-col">
+                        <span class="truncate">{friendAction.label}</span>
+                        {#if friendRequestPossible}
+                            <span class="partner-hint">{$LL.chat.friends.addFriendHint({ name })}</span>
+                        {/if}
+                    </span>
+                </button>
             </div>
         {/if}
 
@@ -191,6 +254,17 @@
         </div>
 
         <div class="partner-group">
+            {#if friendAction?.danger}
+                <button
+                    type="button"
+                    class="u-menu-row u-danger !m-0"
+                    data-testid="partnerFriendAction"
+                    on:click={friendAction.act}
+                >
+                    <span class="u-menu-tile"><svelte:component this={friendAction.icon} /></span>
+                    <span class="truncate">{friendAction.label}</span>
+                </button>
+            {/if}
             {#if !partner.isBot && partner.chatId}
                 <button
                     type="button"
@@ -203,8 +277,8 @@
                     <span class="flex min-w-0 flex-1 flex-col">
                         <span class="truncate"
                             >{partner.isBlocked
-                                ? $LL.chat.directChat.profile.unblock({ name: $roomName })
-                                : $LL.chat.directChat.profile.block({ name: $roomName })}</span
+                                ? $LL.chat.directChat.profile.unblock({ name })
+                                : $LL.chat.directChat.profile.block({ name })}</span
                         >
                         <span class="partner-hint"
                             >{partner.isBlocked
@@ -219,11 +293,11 @@
                     type="button"
                     class="u-menu-row u-danger !m-0"
                     data-testid="partnerReport"
-                    on:click={() => reportPartner(partner, $roomName)}
+                    on:click={() => reportPartner(partner, name)}
                 >
                     <span class="u-menu-tile"><IconFlag /></span>
                     <span class="flex min-w-0 flex-1 flex-col">
-                        <span class="truncate">{$LL.chat.directChat.profile.report({ name: $roomName })}</span>
+                        <span class="truncate">{$LL.chat.directChat.profile.report({ name })}</span>
                         <span class="partner-hint">{$LL.chat.directChat.profile.reportHint()}</span>
                     </span>
                 </button>
@@ -231,7 +305,10 @@
             {#if confirmingDelete}
                 <div class="flex flex-col gap-2 p-2 text-sm" data-testid="partnerDeleteConfirm">
                     <span class="font-bold">{$LL.chat.directChat.deleteChat.confirm()}</span>
-                    <span class="text-xs text-white/60">{$LL.chat.directChat.deleteChat.hint({ name: $roomName })}</span
+                    <span class="text-xs text-white/60"
+                        >{$partnerHolds
+                            ? $LL.chat.directChat.deleteChat.hint({ name })
+                            : $LL.chat.directChat.deleteChat.hintGone({ name })}</span
                     >
                     <div class="flex gap-2">
                         <button
@@ -258,7 +335,11 @@
                     <span class="u-menu-tile"><IconTrash /></span>
                     <span class="flex min-w-0 flex-1 flex-col">
                         <span class="truncate">{$LL.chat.directChat.deleteChat.label()}</span>
-                        <span class="partner-hint">{$LL.chat.directChat.deleteChat.hint({ name: $roomName })}</span>
+                        <span class="partner-hint"
+                            >{$partnerHolds
+                                ? $LL.chat.directChat.deleteChat.hint({ name })
+                                : $LL.chat.directChat.deleteChat.hintGone({ name })}</span
+                        >
                     </span>
                 </button>
             {/if}

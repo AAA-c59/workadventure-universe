@@ -165,7 +165,10 @@ describe("BotApiService once the OIDC access token has run out", () => {
         service.initialize(expired, ADMIN, "room-1");
 
         await expect(service.listBots()).resolves.toEqual([]);
-        expect(mocks.pusherGet).toHaveBeenCalledWith("me", { params: { token: expired, playUri: "room-1" } });
+        expect(mocks.pusherGet).toHaveBeenCalledWith("me", {
+            timeout: 10_000,
+            params: { token: expired, playUri: "room-1" },
+        });
         expect(mocks.setAuthToken).toHaveBeenCalledWith(renewed);
         expect(sessionStorage.getItem("orbit_admin_session_v2")).toBe(SESSION);
     });
@@ -182,6 +185,7 @@ describe("BotApiService once the OIDC access token has run out", () => {
         await expect(service.listBots()).resolves.toEqual([]);
         expect(mocks.pusherGet).toHaveBeenCalledTimes(1);
         expect(mocks.pusherGet).toHaveBeenCalledWith("me", {
+            timeout: 10_000,
             params: { token: refused, playUri: "room-1", refresh: "true" },
         });
     });

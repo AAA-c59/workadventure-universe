@@ -1070,6 +1070,30 @@ class AnalyticsClient {
             })
             .catch((e) => console.error(e));
     }
+    /** The one-time "Get the Universe app" card was shown. */
+    installCardShown(): void {
+        this.posthogPromise
+            ?.then((posthog) => {
+                posthog.capture("wa_install_card_shown");
+            })
+            .catch((e) => console.error(e));
+    }
+    /** The ✕ of the install card: it never shows again. */
+    installCardDismissed(): void {
+        this.posthogPromise
+            ?.then((posthog) => {
+                posthog.capture("wa_install_card_dismissed");
+            })
+            .catch((e) => console.error(e));
+    }
+    /** Universe was installed as an app: from the card or the menu, from the browser's own menu, or seen running as one. */
+    appInstalled(source: "card" | "menu" | "browser" | "app"): void {
+        this.posthogPromise
+            ?.then((posthog) => {
+                posthog.capture("wa_app_installed", { source });
+            })
+            .catch((e) => console.error(e));
+    }
     /** The window size had changed without a `resize` (found when the page was shown again): the app was resized. */
     viewportResync(properties: {
         fromWidth: number;

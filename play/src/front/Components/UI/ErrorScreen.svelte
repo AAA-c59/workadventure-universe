@@ -10,9 +10,11 @@
     // Orbit's butterfly (2.7 KB): the build puts files under 4 KB inside the script itself, so the reconnecting
     // screen shows it without the network.
     import butterfly from "../images/butterfly.webp";
+    import { universeLogo } from "../images/universeLogo";
     import LL from "../../../i18n/i18n-svelte";
 
     import LoaderIcon from "../Icons/LoaderIcon.svelte";
+    import { MEMBERS_ONLY_CODE, forgetDeniedRoom, membersOnlyExit } from "../../Connection/MembersOnlyExit";
     import { reconnectingCopy } from "../../Connection/ReconnectScreen";
     import {
         NEW_VERSION_CODE,
@@ -20,6 +22,7 @@
         canAutoReload,
         recordAutoReload,
     } from "../../Connection/NewVersionReload";
+    import { IconArrowLeft, IconLogin } from "@wa-icons";
 
     // Everything below follows the screen currently in the store: it can change while this screen is up (the
     // "Reconnecting" screen becomes "New version" when the server that answers the reconnect is newer).
@@ -28,18 +31,32 @@
 
     // The room's own logos (Universe's, from the admin); an empty value from the server means "none".
     $: logoErrorSrc = errorScreen?.imageLogo || gameManager?.currentStartedRoom?.loginSceneLogo || undefined;
-    // A logo that fails to load shows the name instead; a failed image is left out.
+    // A logo that fails to load shows Universe's own instead; a failed image is left out.
     let failedLogoSrc: string | undefined;
     let failedImageSrc: string | undefined;
-    $: logoShown = errorScreen?.type !== "reconnecting" && !!logoErrorSrc && logoErrorSrc !== failedLogoSrc;
+    // Every screen but Reconnecting has a logo on top: the room's, else (no room yet, or it failed) Universe's own.
+    $: logoShown = errorScreen?.type !== "reconnecting";
+    $: roomLogoShown = logoShown && !!logoErrorSrc && logoErrorSrc !== failedLogoSrc;
+    $: logoSrc = roomLogoShown ? logoErrorSrc : universeLogo;
     // The update screen shows the logo alone. So does any screen with the logo on top: the room's own picture is not
     // repeated under it. The Reconnecting screen has no logo on top, so it shows that picture as its logo.
     $: imageErrorSrc = isNewVersion
         ? undefined
         : errorScreen?.image || (logoShown ? undefined : gameManager?.currentStartedRoom?.errorSceneLogo) || undefined;
     // When the image is the same picture as the logo shown above it, show it only once, as the logo.
-    $: imageShown =
-        !!imageErrorSrc && imageErrorSrc !== failedImageSrc && !(logoShown && imageErrorSrc === logoErrorSrc);
+    $: imageShown = !!imageErrorSrc && imageErrorSrc !== failedImageSrc && !(logoShown && imageErrorSrc === logoSrc);
+
+    // Members only: a way out, back to the room the player came from or to the start room. The room that turned
+    // them away is not kept as their last room.
+    $: exit =
+        errorScreen?.type === "error" && errorScreen.code === MEMBERS_ONLY_CODE
+            ? membersOnlyExit(gameManager?.tryGetCurrentGameScene?.()?.room.key, window.location.href)
+            : undefined;
+    $: if (exit) forgetDeniedRoom(exit).catch((e) => console.error(e));
+
+    function leaveMembersOnly() {
+        if (exit) window.location.assign(exit.href);
+    }
 
     function click() {
         if (errorScreen?.type === "unauthorized") void connectionManager.logout();
@@ -120,18 +137,16 @@
     >
         <div class="flex flex-col items-center" style=" width: 90%;">
             <div class="logo">
-                {#if $errorScreenStore.type !== "reconnecting"}
-                    {#if logoShown}
-                        <img
-                            src={logoErrorSrc}
-                            on:error={() => (failedLogoSrc = logoErrorSrc)}
-                            alt="Logo error"
-                            style="max-height:25vh; max-width:80%;"
-                            draggable="false"
-                        />
-                    {:else}
-                        <p class="wordmark">Universe</p>
-                    {/if}
+                {#if logoShown}
+                    <img
+                        src={logoSrc}
+                        on:error={() => {
+                            if (roomLogoShown) failedLogoSrc = logoErrorSrc;
+                        }}
+                        alt="Universe"
+                        style="max-height:25vh; max-width:80%;"
+                        draggable="false"
+                    />
                 {/if}
             </div>
 
@@ -221,6 +236,24 @@
                             {$errorScreenStore.buttonTitle}
                         </button>
                     {/if}
+                    {#if exit}
+                        <button
+                            type="button"
+                            class="u-cta m-0 inline-flex h-11 min-w-[220px] items-center justify-center gap-2 rounded-full px-5 text-sm font-bold"
+                            data-testid="membersOnlyExitButton"
+                            on:click={leaveMembersOnly}
+                        >
+                            {#if exit.kind === "back"}
+                                <IconArrowLeft font-size="18" />
+                                {exit.name
+                                    ? $LL.warning.membersOnly.back({ room: exit.name })
+                                    : $LL.warning.membersOnly.backToLastRoom()}
+                            {:else}
+                                <IconLogin font-size="18" />
+                                {$LL.warning.membersOnly.startRoom()}
+                            {/if}
+                        </button>
+                    {/if}
                 </div>
             {/if}
         </div>
@@ -229,12 +262,6 @@
 
 <style lang="scss">
     main.errorScreen {
-        .wordmark {
-            font-size: 2.25rem;
-            font-weight: 700;
-            letter-spacing: 0.02em;
-            margin: 0;
-        }
         min-width: 300px;
         z-index: 700;
         .logo {

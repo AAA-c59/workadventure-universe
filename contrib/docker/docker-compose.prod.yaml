@@ -69,6 +69,7 @@ services:
       - FALLBACK_LOCALE
       - ENABLE_CHAT
       - ENABLE_CHAT_UPLOAD
+      - KLIPY_API_KEY
       - ENABLE_CHAT_ONLINE_LIST
       - ENABLE_CHAT_DISCONNECTED_LIST
       - UPLOADER_URL=/uploader

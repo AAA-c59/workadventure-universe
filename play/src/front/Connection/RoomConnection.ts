@@ -10,6 +10,7 @@ import type {
     AvailabilityStatus,
     CharacterTextureMessage,
     ChatMembersAnswer,
+    ChatPersonAnswer,
     CompanionTextureMessage,
     DeleteCustomEntityMessage,
     EditMapCommandMessage,
@@ -118,8 +119,8 @@ import {
     warningBannerStore,
 } from "../Stores/MenuStore";
 import { requestedScreenSharingState } from "../Stores/ScreenSharingStore";
-import { selectCompanionSceneVisibleStore } from "../Stores/SelectCompanionStore";
-import { selectCharacterSceneVisibleStore } from "../Stores/SelectCharacterStore";
+import { showWokaRefused } from "../Stores/WokaRefusedStore";
+import type { RefusedKind } from "../Stores/WokaRefusedStore";
 import { adminMessagesService } from "./AdminMessagesService";
 import { connectionManager } from "./ConnectionManager";
 import type {
@@ -603,18 +604,18 @@ export class RoomConnection implements RoomConnection {
                     }
                     case "invalidCharacterTextureMessage": {
                         console.warn(
-                            "One of your Woka textures is invalid for this world, you will be redirect to the Woka selection screen"
+                            "One of your Woka textures is invalid for this world, you will be asked what to wear instead"
                         );
-                        this.goToSelectYourWokaScene();
+                        this.goToWokaRefused("woka");
 
                         this.closeConnection();
                         break;
                     }
                     case "invalidCompanionTextureMessage": {
                         console.warn(
-                            "Your companion texture is invalid for this world, you will be redirect to the companion selection screen"
+                            "Your companion texture is invalid for this world, you will be asked what to do instead"
                         );
-                        this.goToSelectYourCompanionScene();
+                        this.goToWokaRefused("companion");
 
                         this.closeConnection();
                         break;
@@ -1793,6 +1794,20 @@ export class RoomConnection implements RoomConnection {
         return answer.chatMembersAnswer;
     }
 
+    /** One person's current name and Woka by chat ID, for a direct chat with someone outside your world. */
+    public async queryChatPerson(chatId: string): Promise<ChatPersonAnswer> {
+        const answer = await this.query({
+            $case: "chatPersonQuery",
+            chatPersonQuery: {
+                chatId,
+            },
+        });
+        if (answer.$case !== "chatPersonAnswer") {
+            throw new Error("Unexpected answer");
+        }
+        return answer.chatPersonAnswer;
+    }
+
     public async getOauthRefreshToken(
         tokenToRefresh: string,
         provider?: string,
@@ -2057,18 +2072,19 @@ export class RoomConnection implements RoomConnection {
         this._friendsUpdateMessageStream.complete();
     }
 
-    private goToSelectYourWokaScene(): void {
+    /**
+     * The world cannot show the player's WOKA or companion: leave the room and ask them (the popup) instead of
+     * picking for them. Its buttons lead on to the picker, or join again.
+     */
+    private goToWokaRefused(kind: RefusedKind): void {
         menuVisiblilityStore.set(false);
         menuIconVisiblilityStore.set(false);
-        selectCharacterSceneVisibleStore.set(true);
-        gameManager.leaveGame(SelectCharacterSceneName, new SelectCharacterScene());
-    }
-
-    private goToSelectYourCompanionScene(): void {
-        menuVisiblilityStore.set(false);
-        menuIconVisiblilityStore.set(false);
-        selectCompanionSceneVisibleStore.set(true);
-        gameManager.leaveGame(SelectCompanionSceneName, new SelectCompanionScene());
+        showWokaRefused(kind);
+        if (kind === "woka") {
+            gameManager.leaveGame(SelectCharacterSceneName, new SelectCharacterScene());
+        } else {
+            gameManager.leaveGame(SelectCompanionSceneName, new SelectCompanionScene());
+        }
     }
 
     private send(message: ClientToServerMessageTsProto): void {

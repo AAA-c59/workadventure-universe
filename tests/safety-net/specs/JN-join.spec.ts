@@ -130,8 +130,10 @@ test.describe("Join: WOKA picker", () => {
         await expect(page.locator("button.wokaBuildButton span:visible")).toHaveText("Build your WOKA");
         await expect(page.locator("button.wokaBuildButton svg")).toBeVisible();
         await expect(page.locator("button.selectCharacterSceneFormSubmit")).toHaveText("Continue");
-        // One collection on the local stack: no pills.
-        await expect(page.getByRole("tab")).toHaveCount(0);
+        // One collection on the local stack: its pill is still there, on, and there is no Recent row (nobody wore a WOKA).
+        await expect(page.getByRole("tab")).toHaveCount(1);
+        await expect(page.getByRole("tab").first()).toHaveAttribute("aria-selected", "true");
+        await expect(page.locator(".woka-recent-row")).toHaveCount(0);
         const tile = wokaTiles(page).first().locator("canvas");
         // Khalid 10-06 (dev findings, item 21): the preview no longer turns on its own, only when you press Rotate.
         // (The row still describes the old 2.4 s loop.) Wait two turns' worth, then check nothing moved.
@@ -193,7 +195,7 @@ test.describe("Join: WOKA picker", () => {
         test.skip(!isPhone(testInfo), "phone only");
         await serveManyCollections(page);
         await openWokaPicker(page, roomUrl(testInfo));
-        await expect(page.locator(".woka-swipe-hint")).toHaveText("swipe the tiles for the next collection");
+        await expect(page.locator(".woka-swipe-hint")).toHaveText("swipe for the next collection");
         const tabs = page.getByRole("tab");
         await swipe(activeTiles(page), -120);
         await expect(tabs.nth(1)).toHaveAttribute("aria-selected", "true");
@@ -201,6 +203,11 @@ test.describe("Join: WOKA picker", () => {
         await expect(tabs.nth(0)).toHaveAttribute("aria-selected", "true");
         await swipe(activeTiles(page), -40);
         await expect(tabs.nth(0)).toHaveAttribute("aria-selected", "true");
+        // The short swipe still slides the page back for a moment; a new swipe is ignored until that is over
+        await expect(page.locator(".woka-pages")).not.toHaveClass(/woka-pages-sliding/);
+        // Not only on the tiles: a swipe on the hint under them (the empty space) counts too
+        await swipe(page.locator(".woka-swipe-hint"), -120);
+        await expect(tabs.nth(1)).toHaveAttribute("aria-selected", "true");
     });
 
     test("JN-010 Picking a tile, arrow keys and Enter", async ({ page }, testInfo) => {
@@ -402,7 +409,7 @@ test.describe("Join: Build your WOKA", () => {
     test("JN-020 Phone: swiping the tiles opens the next part", async ({ page }, testInfo) => {
         test.skip(!isPhone(testInfo), "phone only");
         await openWokaBuilder(page, roomUrl(testInfo));
-        await expect(page.locator(".woka-swipe-hint")).toHaveText("swipe the tiles for the next part");
+        await expect(page.locator(".woka-swipe-hint")).toHaveText("swipe for the next part");
         await swipe(activeTiles(page), -120);
         await expect(page.getByRole("tab", { name: "Eyes" })).toHaveAttribute("aria-selected", "true");
         const pills = page.locator(".woka-pills");

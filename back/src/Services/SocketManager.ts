@@ -700,6 +700,7 @@ export class SocketManager {
                 case "getMemberQuery":
                 case "searchTagsQuery":
                 case "chatMembersQuery":
+                case "chatPersonQuery":
                 case "oauthRefreshTokenQuery":
                 case "joinSpaceQuery":
                 case "leaveSpaceQuery":

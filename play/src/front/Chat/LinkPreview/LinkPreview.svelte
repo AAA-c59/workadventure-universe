@@ -4,9 +4,11 @@
     import LL from "../../../i18n/i18n-svelte";
     import { coWebsites } from "../../Stores/CoWebsiteStore";
     import { SimpleCoWebsite } from "../../WebRtc/CoWebsite/SimpleCoWebsite";
+    import Lightbox from "../Components/Room/Message/Lightbox.svelte";
     import type { LinkKind } from "./LinkKind";
     import { APP_ICONS, youtubeSvg } from "./appIcons";
     import { classifyChatLink, previewedLinkOf } from "./ChatLinkKind";
+    import { isGifSiteImage } from "./LinkKind";
     import type { WebPreview, YoutubePreview } from "./LinkPreviewFetcher";
     import { fetchWebPreview, fetchYoutubePreview, playingChatVideoStore } from "./LinkPreviewFetcher";
     import { IconExternalLink, IconPlayerPlayFilled } from "@wa-icons";
@@ -27,6 +29,7 @@
     let web: WebPreview | undefined;
     let video: YoutubePreview = {};
     let imageFailed = false;
+    let pictureOpen = false;
     let loadedFor: string | undefined;
 
     $: firstLink = previewedLinkOf(body ?? "");
@@ -39,6 +42,7 @@
         web = undefined;
         video = {};
         imageFailed = false;
+        pictureOpen = false;
         if (!url) return;
 
         const kind = classifyChatLink(url);
@@ -86,6 +90,17 @@
         } catch (error) {
             console.error("Could not open a chat link beside the map", error);
         }
+    }
+
+    /**
+     * A plain click on a picture opens the picture viewer, as an uploaded picture does. A Ctrl, Cmd, Shift or Alt click
+     * is the way to open a link elsewhere, so it follows the link into a new tab. The link in the message text stays a link.
+     */
+    function openPicture(event: MouseEvent) {
+        if (link?.kind !== "image") return;
+        if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        pictureOpen = true;
     }
 
     $: playing = $playingChatVideoStore === previewId;
@@ -211,10 +226,11 @@
         href={link.url}
         target="_blank"
         rel="noopener noreferrer"
+        on:click={openPicture}
         data-testid="imageLinkPreview"
     >
         <img
-            class="block w-full max-h-60 object-cover"
+            class="block w-full max-h-60 {isGifSiteImage(link.url) ? 'object-contain' : 'object-cover'}"
             src={link.url}
             alt=""
             loading="lazy"
@@ -223,6 +239,10 @@
             on:error={() => (imageFailed = true)}
         />
     </a>
+    <Lightbox src={link.url} alt="" show={pictureOpen} on:close={() => (pictureOpen = false)} />
+{:else if link?.kind === "image" && (alone || isGifSiteImage(link.url))}
+    <!-- The picture didn't load and its address is not shown above (a lone image link, or a GIF): show it here so it is never lost. -->
+    <a class="link-preview-fallback" href={link.url} target="_blank" rel="noopener noreferrer">{link.url}</a>
 {:else if link?.kind === "web" && web && (web.title || web.description)}
     <a
         class="link-preview block !no-underline !opacity-100"
@@ -269,6 +289,13 @@
     }
     .link-preview-alone {
         margin-top: 8px;
+    }
+    .link-preview-fallback {
+        display: block;
+        padding: 8px 10px;
+        font-size: 13px;
+        overflow-wrap: anywhere;
+        text-decoration: underline;
     }
     .link-preview-mine {
         background: rgba(0, 0, 0, 0.18);

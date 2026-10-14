@@ -3,10 +3,11 @@
     import { loaderProgressStore } from "../../Stores/LoaderStore";
     import { gameManager } from "../../Phaser/Game/GameManager";
     import bgMap from "../images/map-exemple.png";
+    import { universeLogo } from "../images/universeLogo";
 
-    // The room's own loading logo (Universe's, from the admin), else the name.
+    // The room's own loading logo (Universe's, from the admin), else the one built into the game.
     const logo = gameManager.currentStartedRoom.loadingLogo;
-    // A logo that fails to load shows the name instead of a broken image.
+    // A logo that fails to load shows the built-in one instead of a broken image.
     let logoFailed = false;
     const sceneBg = gameManager.currentStartedRoom.backgroundSceneImage ?? bgMap;
     const bgColor = gameManager.currentStartedRoom.backgroundColor ?? "#000000";
@@ -35,7 +36,7 @@
                         on:error={() => (logoFailed = true)}
                     />
                 {:else}
-                    <p class="text-white text-3xl font-bold tracking-wide px-4 m-0">Universe</p>
+                    <img draggable="false" src={universeLogo} class="h-20 px-4" alt="Universe" />
                 {/if}
             </div>
             <div class="w-full h-3 bg-contrast py-[2px]">

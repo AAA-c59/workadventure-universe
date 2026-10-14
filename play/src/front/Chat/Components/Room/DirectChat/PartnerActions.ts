@@ -4,6 +4,11 @@ import { blackListManager } from "../../../../WebRtc/BlackListManager";
 import { showReportScreenStore } from "../../../../Stores/ShowReportScreenStore";
 import { canOpenOrbit, openOrbitProfile, openOrbitProfileByChatId } from "../../../../external-modules/admin-api/index";
 import { goToPersonRoom, locatePerson, walkToPerson } from "../../UserList/PersonNavigation";
+import { friendMenuAction } from "../../UserList/FriendMenuAction";
+import type { FriendMenuAction } from "../../UserList/FriendMenuAction";
+import { ringStore } from "../../../Stores/RingStore";
+import type { Relationship } from "../../../Stores/FriendsStore";
+import type { TranslationFunctions } from "../../../../../i18n/i18n-types";
 import type { DirectPartner } from "./DirectPartnerStore";
 
 function personOf(partner: DirectPartner) {
@@ -50,14 +55,47 @@ export function openPartnerProfile(partner: DirectPartner): void {
     else if (partner.chatId) openOrbitProfileByChatId(partner.chatId);
 }
 
-/** Reporting goes through the game's report screen, which needs their account id. */
+/** Reporting goes through the game's report screen, which needs their account id (known even when they're away). */
 export function canReportPartner(partner: DirectPartner): boolean {
-    return !partner.isBot && partner.user?.uuid !== undefined;
+    return !partner.isBot && partner.uuid !== undefined;
 }
 
 export function reportPartner(partner: DirectPartner, name: string): void {
-    const uuid = partner.user?.uuid;
+    const uuid = partner.uuid;
     if (uuid) showReportScreenStore.set({ userUuid: uuid, userName: name });
+}
+
+/**
+ * Invite works for anyone with an account the pusher can reach (friends, or members of a world you share, anywhere in
+ * Universe), so it only shows while they're online: in Universe or on chat. Never for a bot or someone you blocked, in
+ * chat or in the game (the meeting's Moderation menu).
+ */
+export function canInvitePartner(partner: DirectPartner, invitesEnabled: boolean): boolean {
+    return (
+        invitesEnabled &&
+        !isBotPartner(partner) &&
+        !partner.isBlocked &&
+        !partner.isGameBlocked &&
+        partner.uuid !== undefined &&
+        partner.place.kind !== "offline"
+    );
+}
+
+export function invitePartner(partner: DirectPartner, name: string): void {
+    if (!partner.uuid || partner.isGameBlocked || blackListManager.isBlackListed(partner.uuid)) return;
+    ringStore.ring(partner.uuid, name).catch((error) => console.error(error));
+}
+
+/** Add friend, or what comes next with them (cancel, accept, remove), when friends work here and they have an account. */
+export function partnerFriendAction(
+    partner: DirectPartner,
+    name: string,
+    friendsEnabled: boolean,
+    relationships: ReadonlyMap<string, Relationship>,
+    ll: TranslationFunctions
+): FriendMenuAction | undefined {
+    if (!friendsEnabled || isBotPartner(partner) || !partner.uuid || !partner.chatId) return undefined;
+    return friendMenuAction(relationships.get(partner.uuid) ?? "none", partner.uuid, name, ll);
 }
 
 /**

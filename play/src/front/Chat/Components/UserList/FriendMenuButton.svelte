@@ -1,8 +1,10 @@
 <script lang="ts">
     import { onDestroy } from "svelte";
     import type { ComponentType } from "svelte";
-    import { autoUpdate, computePosition, flip, offset, shift } from "@floating-ui/dom";
+    import { autoUpdate } from "@floating-ui/dom";
+    import RoomOption from "../Room/RoomMenu/RoomOption.svelte";
     import PersonActionButton from "./PersonActionButton.svelte";
+    import { placePersonMenu } from "./PersonMenuPlacement";
     import { openPersonMenuStore } from "./PersonMenuStore";
     import { IconDots } from "@wa-icons";
 
@@ -38,10 +40,7 @@
 
     function position() {
         if (!buttonElement || !menuElement) return;
-        const menu = menuElement;
-        computePosition(buttonElement, menu, { middleware: [offset(6), flip(), shift({ padding: 5 })] })
-            .then(({ x, y }) => Object.assign(menu.style, { left: `${x}px`, top: `${y}px` }))
-            .catch((error) => console.error("Failed to place the friend menu", error));
+        placePersonMenu(buttonElement, menuElement);
     }
 
     function toggle() {
@@ -82,22 +81,21 @@
         <div
             bind:this={menuElement}
             role="menu"
-            class="wa-dropdown-menu fixed z-40 mr-1 rounded-xl border border-white/10 bg-contrast/95 p-1 shadow-2xl backdrop-blur"
+            class="wa-dropdown-menu u-surface fixed z-40 w-max min-w-48 rounded-2xl p-1"
         >
-            {#each items as item (item.key)}
-                <button
-                    type="button"
+            {#each items as item, index (item.key)}
+                {#if item.danger && index > 0 && !items[index - 1].danger}
+                    <div class="u-menu-divider" />
+                {/if}
+                <RoomOption
                     role="menuitem"
-                    class="wa-dropdown-item m-0 flex min-h-10 w-full items-center gap-2 rounded border-0 bg-transparent px-3 text-start text-sm text-nowrap hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50 {item.danger
-                        ? 'text-pop-red'
-                        : 'text-white'}"
+                    IconComponent={item.icon}
+                    title={item.label}
+                    dataTestId={`friend-menu-${item.key}`}
+                    bg={item.danger ? "u-danger" : item.disabled ? "opacity-50" : ""}
                     disabled={item.disabled}
-                    data-testid={`friend-menu-${item.key}`}
-                    on:click|stopPropagation={() => choose(item)}
-                >
-                    <svelte:component this={item.icon} font-size="14" />
-                    {item.label}
-                </button>
+                    on:click={() => choose(item)}
+                />
             {/each}
         </div>
     {/if}

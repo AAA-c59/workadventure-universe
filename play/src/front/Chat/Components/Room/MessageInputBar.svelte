@@ -19,21 +19,27 @@
         chatInputFocusStore,
     } from "../../../Stores/ChatStore";
 
-    import { showHideableFloatingUi, type HideableFloatingUi } from "../../../Utils/svelte-floatingui-show";
+    import {
+        showFloatingUi,
+        showHideableFloatingUi,
+        type HideableFloatingUi,
+    } from "../../../Utils/svelte-floatingui-show";
     import { emoteMenuStore } from "../../../Stores/EmoteStore";
     import LazyEmote from "../../../Components/EmoteMenu/LazyEmote.svelte";
     import { composerDraftStore } from "../../Stores/ComposerDraftStore";
     import { draftMessageService } from "../../Services/DraftMessageService";
     import { localUserStore } from "../../../Connection/LocalUserStore";
     import { MatrixChatRoom } from "../../Connection/Matrix/MatrixChatRoom";
-    import { UPLOADER_URL } from "../../../Enum/EnvironmentVariable";
+    import { KLIPY_API_KEY, UPLOADER_URL } from "../../../Enum/EnvironmentVariable";
     import ComposerLinkPreview from "../../LinkPreview/ComposerLinkPreview.svelte";
+    import GifPicker from "../../Gif/GifPicker.svelte";
     import { withoutPreview } from "../../LinkPreview/ChatLinks";
+    import { appendEmoji } from "./AppendEmoji";
     import MessageInput from "./MessageInput.svelte";
     import ReplyPreview from "./MessageActions/ReplyPreview.svelte";
     import { captureSendDestination, isSendDestinationOpen, spaceGenerationOf } from "./SendDestination";
     import { mainUploadFailure, UploadFailure, uploadFailureReason } from "./UploadFailure";
-    import { IconMoodSmile, IconPaperclip, IconSend, IconX } from "@wa-icons";
+    import { IconGif, IconMoodSmile, IconPaperclip, IconSend, IconX } from "@wa-icons";
 
     // Frontend pre-check constants (server enforces the real limits)
     const UPLOAD_MAX_FILESIZE = 10485760; // 10 MB — matches UPLOAD_MAX_FILESIZE env var
@@ -568,6 +574,7 @@
                 replyingToMessageId: replyMessageId ?? null,
             });
         }
+        hideGifPicker();
         if (emojiPickerOpen) emoteMenuStore.closeEmoteMenu();
         emojiPicker?.destroy();
         emojiPicker = undefined;
@@ -588,7 +595,66 @@
         }
     }
 
+    // The GIF picker is built when it opens and removed when it closes: it starts from its first screen each time.
+    // Only there when the server has a Klipy key.
+    const gifPickerAvailable = KLIPY_API_KEY !== undefined && KLIPY_API_KEY !== "";
+    let gifPickerOpen = false;
+    let removeGifPicker: (() => void) | undefined;
+    let gifButton: HTMLButtonElement;
+
+    function openCloseGifPicker() {
+        if (gifPickerOpen) {
+            hideGifPicker();
+        } else {
+            showGifPicker();
+        }
+    }
+
+    function showGifPicker() {
+        hideEmojiPicker();
+        gifPickerOpen = true;
+        removeGifPicker = showFloatingUi(
+            messageBarRef,
+            GifPicker,
+            {
+                // The picker is as wide as the chat panel the message bar sits on.
+                anchor: messageBarRef,
+                onPick: (url: string) => {
+                    hideGifPicker();
+                    sendGif(url);
+                },
+                onClose: (event?: Event) => {
+                    // The GIF button opens and closes the picker itself: its click is not a click outside.
+                    if (event?.target instanceof Node && gifButton?.contains(event.target)) return;
+                    hideGifPicker();
+                },
+            },
+            // Centred on the bar: as wide as the panel less 8px each side, so it has 8px on both.
+            { placement: "top" },
+            8,
+            false
+        );
+    }
+
+    function hideGifPicker() {
+        if (!gifPickerOpen) return;
+        gifPickerOpen = false;
+        removeGifPicker?.();
+        removeGifPicker = undefined;
+    }
+
+    /** A picked GIF goes as its own message, as its link; what is typed in the box stays there. */
+    function sendGif(url: string) {
+        stopTypingNow();
+        const destination = captureSendDestination(room);
+        if (!isSendDestinationOpen(destination)) return;
+        analyticsClient.chatMessageSent(room instanceof ProximityChatRoom ? "proximity" : "matrix");
+        destination.room.sendMessage(url);
+        messageInput?.focus();
+    }
+
     function showEmojiPicker() {
+        hideGifPicker();
         emojiPickerOpen = true;
         if (emojiPicker) {
             emojiPicker.show();
@@ -600,7 +666,7 @@
             LazyEmote,
             {
                 onEmojiClick: (event: EmojiClickEvent) => {
-                    message += event.detail.unicode ?? "";
+                    message = appendEmoji(message, event.detail.unicode ?? "");
                 },
                 onClose: (event?: Event) => {
                     // The emoji button opens and closes the picker itself: its click is not a click outside. The
@@ -889,6 +955,23 @@
     >
         <IconPaperclip font-size={18} />
     </button>
+    {#if gifPickerAvailable}
+        <button
+            data-testid="gifPickerButton"
+            class="p-0 m-0 h-11 w-11 flex items-center justify-center text-white hover:bg-white/10 rounded-none {gifPickerOpen
+                ? 'bg-white/10'
+                : ''}"
+            bind:this={gifButton}
+            on:click={openCloseGifPicker}
+            aria-pressed={gifPickerOpen}
+            aria-haspopup="dialog"
+            disabled={room instanceof ProximityChatRoom ? false : disabled}
+            title={$LL.chat.gifPicker.title()}
+            aria-label={$LL.chat.gifPicker.title()}
+        >
+            <IconGif font-size={20} />
+        </button>
+    {/if}
     <button
         data-testid="emojiPickerButton"
         class="p-0 m-0 h-11 w-11 flex items-center justify-center text-white hover:bg-white/10 rounded-none {emojiPickerOpen

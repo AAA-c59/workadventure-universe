@@ -20,6 +20,11 @@
     import type { WokaData, WokaTexture } from "./WokaTypes";
 
     export let selectedTextures: Record<string, string>;
+    /**
+     * An outfit from the server: its pictures, bottom to top. Drawn as they come, instead of looking the parts up in
+     * `wokaData` (the Wokas of another place are not in this room's catalog).
+     */
+    export let layers: string[] | null = null;
     export let wokaData: WokaData | null = null;
     export let canvasSize = 64;
     export let direction: number = 0;
@@ -29,6 +34,7 @@
     export let walking = false;
 
     const bodyPartOrder = ["body", "eyes", "hair", "clothes", "hat", "accessory", "woka"];
+    $: drawOrder = layers ? layers.map((_, index) => `layer${index}`) : bodyPartOrder;
 
     let canvas: HTMLCanvasElement;
     let ctx: CanvasRenderingContext2D | undefined;
@@ -57,7 +63,7 @@
 
     function loadImages(urls: Record<string, string>) {
         const nextImages: Record<string, HTMLImageElement> = {};
-        for (const part of bodyPartOrder) {
+        for (const part of drawOrder) {
             const url = urls[part];
             if (!url) continue;
             const img = cachedImage(url);
@@ -82,7 +88,7 @@
         if (!ctx || !canvas) return;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.imageSmoothingEnabled = false;
-        for (const part of bodyPartOrder) {
+        for (const part of drawOrder) {
             const img = images[part];
             if (img && img.complete && img.naturalWidth > 0) {
                 ctx.drawImage(img, frame * 32, direction * 32, 32, 32, 0, 0, canvasSize, canvasSize);
@@ -90,11 +96,13 @@
         }
     }
 
-    $: urls = Object.fromEntries(
-        bodyPartOrder
-            .map((part) => [part, findTextureUrl(part, selectedTextures, wokaData, getTextureUrl)] as const)
-            .filter((entry): entry is readonly [string, string] => entry[1] !== null)
-    );
+    $: urls = layers
+        ? Object.fromEntries(layers.map((url, index) => [`layer${index}`, getTextureUrl(url)]))
+        : Object.fromEntries(
+              bodyPartOrder
+                  .map((part) => [part, findTextureUrl(part, selectedTextures, wokaData, getTextureUrl)] as const)
+                  .filter((entry): entry is readonly [string, string] => entry[1] !== null)
+          );
 
     // Only reload when the resolved image URLs change, so a parent re-render with an equal
     // texture selection keeps the current picture instead of flashing blank.

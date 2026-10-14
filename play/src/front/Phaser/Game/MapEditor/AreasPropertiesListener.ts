@@ -74,7 +74,7 @@ import {
     requestVisitCardsStore,
     selectedChatIDRemotePlayerStore,
 } from "../../../Stores/GameStore";
-import { isMediaBreakpointUp } from "../../../Utils/BreakpointsUtils";
+import { getTriggerHint } from "../../../Utils/TriggerHint";
 import type { MessageUserJoined } from "../../../Connection/ConnexionModels";
 import { navChat } from "../../../Chat/Stores/ChatStore";
 import type { Area } from "../../Entity/Area";
@@ -520,7 +520,7 @@ export class AreasPropertiesListener {
                 this.coWebsitesActionTriggers.set(property.id, actionId);
                 let message = property.triggerMessage;
                 if (message === undefined) {
-                    message = isMediaBreakpointUp("md") ? get(LL).trigger.mobile.newTab() : get(LL).trigger.newTab();
+                    message = getTriggerHint("newTab");
                 }
 
                 popupStore.addPopup(
@@ -579,7 +579,7 @@ export class AreasPropertiesListener {
         if (localUserStore.getForceCowebsiteTrigger() || property.trigger === ON_ACTION_TRIGGER_BUTTON) {
             let message = property.triggerMessage;
             if (!message) {
-                message = isMediaBreakpointUp("md") ? get(LL).trigger.mobile.cowebsite() : get(LL).trigger.cowebsite();
+                message = getTriggerHint("cowebsite");
             }
 
             this.coWebsitesActionTriggers.set(property.id, actionId);
@@ -819,7 +819,7 @@ export class AreasPropertiesListener {
         if (forceTrigger || property.trigger === ON_ACTION_TRIGGER_BUTTON) {
             let message = property.triggerMessage;
             if (message === undefined) {
-                message = isMediaBreakpointUp("md") ? get(LL).trigger.mobile.jitsiRoom() : get(LL).trigger.jitsiRoom();
+                message = getTriggerHint("jitsiRoom");
             }
 
             popupStore.addPopup(
@@ -1542,7 +1542,7 @@ export class AreasPropertiesListener {
                 this.coWebsitesActionTriggers.set(property.id, actionId);
                 let message = property.triggerMessage;
                 if (message === undefined) {
-                    message = isMediaBreakpointUp("md") ? get(LL).trigger.mobile.newTab() : get(LL).trigger.newTab();
+                    message = getTriggerHint("newTab");
                 }
 
                 popupStore.addPopup(
@@ -1576,7 +1576,7 @@ export class AreasPropertiesListener {
         if (localUserStore.getForceCowebsiteTrigger() || property.trigger === ON_ACTION_TRIGGER_BUTTON) {
             let message = property.triggerMessage;
             if (!message) {
-                message = isMediaBreakpointUp("md") ? get(LL).trigger.mobile.cowebsite() : get(LL).trigger.cowebsite();
+                message = getTriggerHint("cowebsite");
             }
 
             this.coWebsitesActionTriggers.set(property.id, actionId);

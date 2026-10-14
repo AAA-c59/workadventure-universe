@@ -16,6 +16,8 @@ export type ChatUser = {
     pictureStore: PictureStore | undefined;
     /** Their saved Woka, drawn only when shown: what a person who is away looks like, until they have a live one. */
     storedWoka?: PictureStore;
+    /** The name they go by in Universe (the game's, or the back office's), never the chat account's. */
+    gameName?: string;
     roomName: string | undefined;
     playUri: string | undefined;
     isAdmin?: boolean;
@@ -35,6 +37,8 @@ export type AdminUser = {
     pictureStore: PictureStore | undefined;
     /** Their saved Woka, drawn only when shown: what a person who is away looks like, until they have a live one. */
     storedWoka?: PictureStore;
+    /** The name they go by in Universe (the game's, or the back office's), never the chat account's. */
+    gameName?: string;
     roomName: string | undefined;
     playUri: string | undefined;
     isAdmin?: boolean;
@@ -116,7 +120,11 @@ export interface ChatRoomMembershipManagement {
     readonly myMembership: Readable<ChatRoomMembership>;
     readonly members: Readable<ChatRoomMember[]>;
     readonly joinRoom: () => Promise<void>;
-    readonly leaveRoom: () => Promise<void>;
+    /**
+     * Leaves the room. With `forget` it also forgets it, so it is gone from this person's apps for good (a deleted chat),
+     * not left behind as an empty room.
+     */
+    readonly leaveRoom: (options?: { forget?: boolean }) => Promise<void>;
 }
 
 export interface ChatRoomNotificationControl {

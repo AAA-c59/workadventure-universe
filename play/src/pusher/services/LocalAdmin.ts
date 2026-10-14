@@ -9,6 +9,7 @@ import type {
     OauthRefreshToken,
     RoomRedirect,
     Capabilities,
+    WokaMine,
 } from "@workadventure/messages";
 import { OpidWokaNamePolicy } from "@workadventure/messages";
 import axios from "axios";
@@ -52,7 +53,7 @@ import { MetaTagsDefaultValue } from "./MetaTagsBuilder";
 import { localCompanionService } from "./LocalCompanionSevice";
 import type { ShortMapDescription, ShortMapDescriptionList } from "./ShortMapDescription";
 import type { UniverseRoomsData } from "./UniverseRooms";
-import type { WorldChatMembersData } from "./WorldChatMembersData";
+import type { ChatPersonData, WorldChatMembersData } from "./WorldChatMembersData";
 import { iceServersService } from "./IceServersService";
 
 /**
@@ -427,6 +428,10 @@ class LocalAdmin implements AdminInterface {
         return Promise.reject(new Error("No admin backoffice set!"));
     }
 
+    getWokaMine(userIdentifier: string, roomUrl: string): Promise<WokaMine | undefined> {
+        return Promise.resolve(undefined);
+    }
+
     public getCapabilities(): Promise<Capabilities> {
         return Promise.resolve({
             "api/woka/list": "v1",
@@ -451,6 +456,10 @@ class LocalAdmin implements AdminInterface {
             members: [],
             total: 0,
         });
+    }
+
+    getChatPerson(chatId: string, playUri: string): Promise<ChatPersonData | undefined> {
+        return Promise.resolve(undefined);
     }
 
     updateChatId(userIdentifier: string, chatId: string): Promise<void> {

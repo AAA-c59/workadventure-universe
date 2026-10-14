@@ -7,6 +7,7 @@ import type {
     RoomRedirect,
     Capabilities,
     IceServer,
+    WokaMine as WokaMineType,
 } from "@workadventure/messages";
 import {
     isOauthRefreshToken,
@@ -20,6 +21,7 @@ import {
     isMapDetailsData,
     isRoomRedirect,
     WokaDetail,
+    wokaMine,
 } from "@workadventure/messages";
 import { z } from "zod";
 import { extendApi } from "@anatine/zod-openapi";
@@ -38,7 +40,7 @@ import type { AuthTokenData } from "./JWTTokenManager";
 import { jwtTokenManager } from "./JWTTokenManager";
 import { ShortMapDescriptionList } from "./ShortMapDescription";
 import { UniverseRoomsData } from "./UniverseRooms";
-import { WorldChatMembersData } from "./WorldChatMembersData";
+import { ChatPersonData, WorldChatMembersData } from "./WorldChatMembersData";
 import { iceServersService } from "./IceServersService";
 import type { BanAppealResult } from "./BanDetails";
 import { BanDetailsData } from "./BanDetails";
@@ -83,6 +85,10 @@ export const isFetchMemberDataByUuidSuccessResponse = z.object({
     characterTextures: extendApi(z.array(WokaDetail), {
         description:
             "This data represents the textures (WOKA) that will be available to users. If an empty array is returned, the user is redirected to the Woka selection page.",
+    }),
+    characterTextureIds: extendApi(z.array(z.string()).optional(), {
+        description:
+            "The ids of the Woka the player's account wears, even when this world cannot show it. The game keeps them on the device. Omitted by admins that do not know.",
     }),
     isCompanionTextureValid: extendApi(z.boolean(), {
         description:
@@ -1045,6 +1051,56 @@ class AdminApi implements AdminInterface {
         return;
     }
 
+    async getWokaMine(userIdentifier: string, roomUrl: string): Promise<WokaMineType | undefined> {
+        if (this.capabilities["api/woka/mine"] === undefined) {
+            // The admin does not tell what a player wears. Nothing to answer.
+            return undefined;
+        }
+
+        /**
+         * @openapi
+         * /api/woka/mine:
+         *   get:
+         *     tags: ["AdminAPI"]
+         *     description: What the player wears and wore lately, as seen from the room (a signed-in player only).
+         *     security:
+         *      - Bearer: []
+         *     produces:
+         *      - "application/json"
+         *     parameters:
+         *      - name: "roomUrl"
+         *        in: "query"
+         *        description: "The room URL"
+         *        type: "string"
+         *        required: true
+         *        example: "https://play.workadventu.re/@/teamSlug/worldSlug/roomSlug"
+         *      - name: "uuid"
+         *        in: "query"
+         *        description: "The uuid of the user \n It can be an uuid or an email"
+         *        type: "string"
+         *        required: true
+         *        example: "998ce839-3dea-4698-8b41-ebbdf7688ad8"
+         *     responses:
+         *       200:
+         *         description: The current Woka, a suggestion, the recent Wokas and the companion
+         *       404:
+         *         description: Guest or unknown user
+         */
+        try {
+            const res = await axios.get<unknown, AxiosResponse<unknown>>(ADMIN_API_URL + "/api/woka/mine", {
+                headers: { Authorization: `${ADMIN_API_TOKEN}` },
+                params: { roomUrl, uuid: userIdentifier },
+                timeout: 10_000,
+            });
+            return wokaMine.parse(res.data);
+        } catch (err) {
+            if (isAxiosError(err) && err.response?.status === 404) {
+                return undefined;
+            }
+            throw err;
+        }
+    }
+
     async getWorldChatMembers(playUri: string, searchText = ""): Promise<WorldChatMembersData> {
         /**
          * @openapi
@@ -1087,6 +1143,50 @@ class AdminApi implements AdminInterface {
         });
 
         return WorldChatMembersData.parse(response.data);
+    }
+
+    /**
+     * @openapi
+     * /api/chat/person:
+     *   get:
+     *     tags: ["AdminAPI"]
+     *     description: One person's current name and Woka by chat ID, for a direct chat with someone outside the asker's world. Never an email address or an id.
+     *     security:
+     *      - Bearer: []
+     *     produces:
+     *      - "application/json"
+     *     parameters:
+     *      - name: "chatId"
+     *        in: "query"
+     *        description: "The person's chat ID (Matrix user ID)"
+     *        type: "string"
+     *        required: true
+     *        example: "@john.doe:matrix.org"
+     *      - name: "playUri"
+     *        in: "query"
+     *        description: "The room the asker is in; its world decides which Woka is sent"
+     *        type: "string"
+     *        example: "https://play.workadventu.re/@/teamSlug/worldSlug/roomSlug"
+     *     responses:
+     *       200:
+     *         description: The person's name and Woka (bottom layer first; empty when there is none to show)
+     *       404:
+     *         description: No one has this chat ID
+     */
+    async getChatPerson(chatId: string, playUri: string): Promise<ChatPersonData | undefined> {
+        try {
+            const response = await axios.get<unknown>(`${ADMIN_API_URL}/api/chat/person`, {
+                headers: { Authorization: `${ADMIN_API_TOKEN}` },
+                params: { chatId, playUri },
+                // Fail fast when the admin is slow: the chat asks again later.
+                timeout: 10_000,
+            });
+            return ChatPersonData.parse(response.data);
+        } catch (e) {
+            // No one has this chat ID (or an older admin has no such lookup): the chat keeps what it has.
+            if (isAxiosError(e) && e.response?.status === 404) return undefined;
+            throw e;
+        }
     }
 
     /**

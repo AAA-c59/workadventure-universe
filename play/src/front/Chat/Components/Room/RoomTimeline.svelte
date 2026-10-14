@@ -25,12 +25,15 @@
     import { formatPeopleNames } from "../TopRow/TopRowSummary";
     import {
         PERSON_COLOUR_CONTEXT,
+        NAME_BY_CHAT_ID_CONTEXT,
         WOKA_BY_CHAT_ID_CONTEXT,
         createColourByChatIdStore,
+        createNameByChatIdStore,
         createWokaByChatIdStore,
         personColour,
     } from "../../Stores/ChatUserWokaStore";
     import type { PersonColourOf } from "../../Stores/ChatUserWokaStore";
+    import { currentChatPeople } from "../../Stores/ChatPeopleLookup";
     import Avatar from "../Avatar.svelte";
     import { MatrixChatRoom } from "../../Connection/Matrix/MatrixChatRoom";
     import { openProfileRoomIdStore } from "../../Stores/PartnerProfileStore";
@@ -57,7 +60,14 @@
     if (!hasContext(WOKA_BY_CHAT_ID_CONTEXT)) {
         setContext(
             WOKA_BY_CHAT_ID_CONTEXT,
-            createWokaByChatIdStore(gameManager.getCurrentGameScene().userProviderMerger)
+            createWokaByChatIdStore(gameManager.getCurrentGameScene().userProviderMerger, currentChatPeople()?.store)
+        );
+    }
+    // A direct chat names the other person as they go by in Universe (header and profile).
+    if (!hasContext(NAME_BY_CHAT_ID_CONTEXT)) {
+        setContext(
+            NAME_BY_CHAT_ID_CONTEXT,
+            createNameByChatIdStore(gameManager.getCurrentGameScene().userProviderMerger, currentChatPeople()?.store)
         );
     }
 
