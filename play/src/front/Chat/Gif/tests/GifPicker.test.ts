@@ -562,11 +562,14 @@ describe("GifPicker", () => {
         });
     });
 
-    it("writes the name of each GIF on it, for the hover", async () => {
+    it("shows each GIF alone, its name only for screen readers", async () => {
         mount(fakeClient());
         type("hello");
         await vi.advanceTimersByTimeAsync(350);
         await settle();
-        expect(target.querySelector('[data-testid="gifPickerItem"] .gif-name')?.textContent).toBe("gif a");
+        const item = target.querySelector('[data-testid="gifPickerItem"]');
+        expect(item?.textContent?.trim()).toBe("");
+        expect(item?.getAttribute("aria-label")).toContain("gif a");
+        expect(item?.querySelector("img")?.getAttribute("alt")).toBe("gif a");
     });
 });

@@ -488,7 +488,6 @@
                                     draggable="false"
                                     referrerpolicy="no-referrer"
                                 />
-                                {#if item.title}<span class="gif-name" aria-hidden="true">{item.title}</span>{/if}
                             </button>
                         {/each}
                     </div>
@@ -743,27 +742,6 @@
         transition: background 0.12s;
         pointer-events: none;
     }
-    /* Its name along the bottom, while it is hovered or has the keyboard focus. */
-    .gif-name {
-        position: absolute;
-        right: 0;
-        bottom: 0;
-        left: 0;
-        z-index: 1;
-        padding: 18px 8px 6px;
-        overflow: hidden;
-        background: linear-gradient(transparent, rgba(0, 0, 0, 0.75));
-        font-size: 12px;
-        font-weight: 600;
-        text-align: left;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        opacity: 0;
-        transition: opacity 0.12s;
-    }
-    .gif:focus-visible .gif-name {
-        opacity: 1;
-    }
     .gif:active {
         transform: scale(0.96);
         filter: brightness(0.7);
@@ -782,9 +760,6 @@
         }
         .gif:hover::after {
             background: rgba(255, 255, 255, 0.1);
-        }
-        .gif:hover .gif-name {
-            opacity: 1;
         }
         .round-button:hover {
             background: rgba(255, 255, 255, 0.1);
@@ -886,8 +861,7 @@
         .tile::after,
         .tile::before,
         .gif,
-        .gif::after,
-        .gif-name {
+        .gif::after {
             transition: none;
         }
     }
